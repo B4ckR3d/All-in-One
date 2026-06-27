@@ -1,239 +1,1135 @@
 #!/usr/bin/env python3
 """
-All-in-One Security Toolkit v2.0
-Modern Interactive CLI — Menu-driven, no memorization needed
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                                                                           ║
+║   ██████╗ ██████╗  ██████╗ ██████╗  █████╗ ███████╗███████╗ █████╗  ██████╗   ║
+║   ██╔══██╗██╔══██╗██╔═══██╗██╔══██╗██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝   ║
+║   ██████╔╝██████╔╝██║   ██║██║  ██║███████║███████╗███████╗███████║██║  ███╗  ║
+║   ██╔═══╝ ██╔══██╗██║   ██║██║  ██║██╔══██║╚════██║╚════██║██╔══██║██║   ██║  ║
+║   ██║     ██║  ██║╚██████╔╝██████╔╝██║  ██║███████║███████║██║  ██║╚██████╔╝  ║
+║   ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝ ╚═════╝   ║
+║                                                                           ║
+║   SECURITY TOOLKIT v3.0 — AUTO RECON + INTERACTIVE MENU                  ║
+║   Author: PUKI AI AGENT — All-in-One Bug Bounty & Recon Framework        ║
+║                                                                           ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+Modern security recon toolkit with:
+  - AUTO RECON: Full automation, just input URL
+  - Amass: Advanced subdomain enumeration
+  - Nuclei: Template-based vulnerability scanner
+  - SQLMap: SQL Injection scanner
+  - ffuf: Directory/content fuzzing
+  - CVE: NVD database search
+  - +30 built-in modules
 """
+
 import os
 import sys
-import subprocess
-import requests
 import re
 import json
+import time
+import socket
+import subprocess
+import requests
 import hashlib
 import base64
 import urllib.parse
 import ssl
-import socket
 import whois
-from datetime import datetime
+import ipaddress
+from datetime import datetime, timezone
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import deque
 
 # ─── Colors ────────────────────────────────────────────────────────────────
 C = {
-    'R': '\033[91m',  # Red
-    'G': '\033[92m',  # Green
-    'Y': '\033[93m',  # Yellow
-    'B': '\033[94m',  # Blue
-    'M': '\033[95m',  # Magenta
-    'C': '\033[96m',  # Cyan
-    'W': '\033[97m',  # White
-    'D': '\033[90m',  # Dark gray
-    'BOLD': '\033[1m',
-    'DIM': '\033[2m',
-    'RESET': '\033[0m',
+    'R': '\033[91m', 'G': '\033[92m', 'Y': '\033[93m', 'B': '\033[94m',
+    'M': '\033[95m', 'C': '\033[96m', 'W': '\033[97m', 'D': '\033[90m',
+    'BOLD': '\033[1m', 'DIM': '\033[2m', 'RESET': '\033[0m',
 }
+def c(col, txt): return f"{C.get(col,'')}{txt}{C['RESET']}"
 
-def c(color, text):
-    return f"{C.get(color, '')}{text}{C['RESET']}"
+# ─── Output Dir ───────────────────────────────────────────────────────────
+OUTPUT_DIR = Path("scan_results")
+OUTPUT_DIR.mkdir(exist_ok=True)
 
+def save_report(domain, content, filename=None):
+    fn = filename or f"{domain}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    path = OUTPUT_DIR / fn
+    path.parent.mkdir(exist_ok=True)
+    with open(path, 'w') as f:
+        f.write(content)
+    return path
+
+# ─── Banner ───────────────────────────────────────────────────────────────
 def banner():
-    b = f"""
-{C['C']}{C['BOLD']}╔═══════════════════════════════════════════════════════════════════╗
-║  {C['W']}██████╗ ██╗   ██╗ ██████╗     ████████╗███████╗██╗   ██╗{C['C']}          ║
-║  {C['W']}██╔══██╗██║   ██║██╔════╝     ╚══██╔══╝██╔════╝██║   ██║{C['C']}          ║
-║  {C['W']}██████╔╝██║   ██║██║  ███╗       ██║   █████╗  ██║   ██║{C['C']}          ║
-║  {C['W']}██╔═══╝ ██║   ██║██║   ██║       ██║   ██╔══╝  ╚═╝   ╈█║{C['C']}          ║
-║  {C['W']}██║     ╚██████╔╝╚██████╔╝       ██║   ███████╗      ██║{C['C']}          ║
-║  {C['W']}╚═╝      ╚═════╝  ╚═════╝        ╚═╝   ╚══════╝      ╚═╝{C['C']}          ║
-║  {C['M']}SECURITY TOOLKIT v2.0 — Interactive Mode{C['C']}{C['BOLD']}                        ║
-╚═══════════════════════════════════════════════════════════════════╝{C['RESET']}"""
-    print(b)
+    print("""
+    \033[96m\033[1m
+    ╔═══════════════════════════════════════════════════════════════════════════════╗
+    ║   ██████╗ ██████╗  ██████╗ ██████╗  █████╗ ███████╗███████╗ █████╗  ██████╗   ║
+    ║   ██╔══██╗██╔══██╗██╔═══██╗██╔══██╗██╔══██╗██╔════╝██╔════╝██╔══██╗██╔════╝   ║
+    ║   ██████╔╝██████╔╝██║   ██║██║  ██║███████║███████╗███████╗███████║██║  ███╗  ║
+    ║   ██╔═══╝ ██╔══██╗██║   ██║██║  ██║██╔══██║╚════██║╚════██║██╔══██║██║   ██║  ║
+    ║   ██║     ██║  ██║╚██████╔╝██████╔╝██║  ██║███████║███████║██║  ██║╚██████╔╝  ║
+    ║   ╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝ ╚═════╝   ║
+    ║                                                                               ║
+    ║   v3.0 - PUKI AI AGENT - AUTO RECON + NUCLEI + SQLMAP + FFUF + AMASS        ║
+    ║                                                                               ║
+    ╚═══════════════════════════════════════════════════════════════════════════════╝
+    \033[0m""")
 
 def clear():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def input_str(prompt):
-    return input(f"\n{C['C']}{prompt}>{C['RESET']} ").strip()
+def inp(prompt):
+    return input(f"\n  {c('C','›')} {c('W',prompt)}: ").strip()
 
-def input_int(prompt, min_val=1, max_val=99):
+def inp_int(prompt, min_v=1, max_v=99):
     while True:
         try:
-            val = int(input_str(prompt))
-            if min_val <= val <= max_val:
-                return val
-            print(f"  {C['R']}! Input between {min_val}-{max_val}{C['RESET']}")
+            v = int(inp(prompt))
+            if min_v <= v <= max_v:
+                return v
+            print(f"  {c('R','✗')} Input between {min_v}-{max_v}")
         except ValueError:
-            print(f"  {C['R']}! Must be a number{C['RESET']}")
+            print(f"  {c('R','✗')} Must be a number")
 
 def pause():
-    input(f"\n  {C['D']}[Enter to continue]{C['RESET']}")
+    input(f"\n  {c('D','[ Press ENTER to continue ]')}")
 
-def loading(text="Loading"):
-    print(f"  {C['Y']}⟳ {text}...{C['RESET']}")
+def ok(msg): print(f"  {c('G','✓')} {msg}")
+def no(msg): print(f"  {c('R','✗')} {msg}")
+def warn(msg): print(f"  {c('Y','⚠')} {msg}")
+def info(msg): print(f"  {c('C','ℹ')} {msg}")
+def step(msg): print(f"\n  {c('M','▸')} {c('BOLD',msg)}")
+def result(msg): print(f"  {c('W',msg)}")
+def highlight(msg): print(f"  {c('G',msg)}")
+def separator():
+    print(f"  {c('D','─'*58)}")
 
-def success(msg):
-    print(f"  {C['G']}✓ {msg}{C['RESET']}")
+# ─── Tool Status Check ────────────────────────────────────────────────────
+def check_tool(name, cmd):
+    try:
+        subprocess.run(cmd, shell=True, capture_output=True, timeout=5)
+        return True
+    except:
+        return False
 
-def warn(msg):
-    print(f"  {C['Y']}⚠ {msg}{C['RESET']}")
+TOOLS = {
+    'nuclei':   check_tool('nuclei',   'nuclei -version'),
+    'amass':     check_tool('amass',    'amass enum -version'),
+    'sqlmap':    check_tool('sqlmap',   'sqlmap --version'),
+    'ffuf':      check_tool('ffuf',     'ffuf -V'),
+    'subfinder': check_tool('subfinder','subfinder -version'),
+    'assetfinder': check_tool('assetfinder','assetfinder --version'),
+    'nmap':      check_tool('nmap',     'nmap --version'),
+    ' httpx':    check_tool('httpx',    'httpx -version'),
+    'anew':      check_tool('anew',     'anew --help'),
+    'notify':    check_tool('notify',   'notify -version'),
+    'wev':       check_tool('wev',     'wev --help'),
+    'naabu':     check_tool('naabu',    'naabu --version'),
+}
 
-def error(msg):
-    print(f"  {C['R']}✗ {msg}{C['RESET']}")
-
-def info(msg):
-    print(f"  {C['C']}ℹ {msg}{C['RESET']}")
-
-def header(msg):
-    print(f"\n{C['BOLD']}{C['C']}{'─'*60}{C['RESET']}")
-    print(f"{C['BOLD']}{C['C']}  {msg}{C['RESET']}")
-    print(f"{C['BOLD']}{C['C']}{'─'*60}{C['RESET']}")
-
-def result(msg):
-    print(f"  {C['W']}{msg}{C['RESET']}")
-
-def highlight(msg):
-    print(f"  {C['G']}{msg}{C['RESET']}")
-
-# ─── Tools ────────────────────────────────────────────────────────────────
-
-def tool_subdomain(domain):
-    header("SUBDOMAIN ENUMERATION")
-    info(f"Target: {domain}")
-    loading("Enumerating subdomains")
+def check_tools():
+    info("Checking tools...")
+    available = []
+    missing = []
+    for tool, present in TOOLS.items():
+        if present:
+            available.append(tool)
+            ok(f"{tool} installed")
+        else:
+            missing.append(tool)
+            no(f"{tool} NOT found")
     
-    wordlist = ['www','api','dev','staging','prod','app','admin','blog','shop','cdn',
-                'mail','ftp','vpn','dns','backup','test','demo','legacy','old','v1','v2',
-                'console','dashboard','secure','auth','login','register','status','monitor',
-                'assets','static','media','img','images','files','storage','upload','download']
-    
-    found = []
-    for word in wordlist:
-        subdomain = f"{word}.{domain}"
-        try:
-            ip = socket.gethostbyname(subdomain)
-            found.append(f"  {C['G']}◆{C['RESET']} {subdomain} → {ip}")
-            print(f"  {C['G']}◆{C['RESET']} {subdomain} → {ip}")
-        except:
-            pass
-    
-    info(f"Found {len(found)} subdomains")
-    return [f"{word}.{domain}" for word in wordlist]  # return all checked
+    if missing:
+        warn(f"\nInstall missing tools: sudo apt install {' '.join(missing)}")
+        warn("Or: go install, pip install, or see tool docs")
+    return available
 
-def tool_dns(domain):
-    header("DNS RECORDS")
-    info(f"Target: {domain}")
+# ─── Domain Utils ─────────────────────────────────────────────────────────
+def extract_domain(url):
+    url = url.strip()
+    if not re.match(r'^https?://', url):
+        url = 'http://' + url
+    try:
+        parsed = requests.utils.urlparse(url)
+        return parsed.netloc or parsed.path
+    except:
+        return url.split('/')[0].split('?')[0]
+
+def resolve_domain(domain):
+    try:
+        return socket.gethostbyname(domain)
+    except:
+        return None
+
+def is_valid_domain(domain):
+    try:
+        socket.getaddrinfo(domain, 80)
+        return True
+    except:
+        return False
+
+# ─── Auto Recon Engine ────────────────────────────────────────────────────
+def auto_recon(domain):
+    """Full automated recon — just input URL, everything runs automatically"""
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    domain_safe = re.sub(r'[^a-zA-Z0-9._-]', '_', domain)
+    report_file = OUTPUT_DIR / f"auto_recon_{domain_safe}_{ts}.txt"
     
-    records = {
-        'A': [], 'AAAA': [], 'MX': [], 'TXT': [], 'NS': [], 'CNAME': []
+    results = {
+        'domain': domain,
+        'ip': resolve_domain(domain),
+        'subdomains': [],
+        'open_ports': [],
+        'vulnerabilities': [],
+        'cves': [],
+        'tech': [],
+        'urls': [],
+        'secrets': [],
     }
     
+    report_lines = []
+    def log(msg):
+        report_lines.append(msg)
+        print(f"  {c('C','•')} {msg}")
+    
+    def section(name):
+        print(f"\n  {c('BOLD',c('M','═'*55))}")
+        print(f"  {c('BOLD',c('M',f'  ▶ {name}'))}")
+        print(f"  {c('BOLD',c('M','═'*55))}")
+    
+    # ── 1. WHOIS ──────────────────────────────────────────────────────
+    section("1/8 | WHOIS LOOKUP")
     try:
-        # A records
-        try:
-            ip = socket.gethostbyname(domain)
-            records['A'].append(ip)
-            highlight(f"A: {ip}")
-        except: pass
-        
-        # NS records
-        try:
-            ns = socket.getaddrinfo(domain, 53, socket.AF_INET, socket.SOCK_STREAM)
-            for r in ns[:2]:
-                records['NS'].append(r[4][0])
-                highlight(f"NS: {r[4][0]}")
-        except: pass
-        
-        # Try WHOIS for NS
-        try:
-            w = whois.whois(domain)
-            if w.name_servers:
-                for ns in (w.name_servers or [])[:3]:
-                    highlight(f"NS: {ns}")
-        except: pass
-        
+        w = whois.whois(domain)
+        log(f"Domain: {w.domain_name}")
+        log(f"Registrar: {w.registrar}")
+        if w.creation_date:
+            log(f"Created: {w.creation_date}")
+        if w.expiration_date:
+            log(f"Expires: {w.expiration_date}")
+        if w.name_servers:
+            for ns in (w.name_servers or [])[:5]:
+                log(f"NS: {ns}")
     except Exception as e:
-        error(f"DNS error: {e}")
-
-def tool_port_scan(domain):
-    header("PORT SCANNING")
-    info(f"Target: {domain}")
-    info("Scanning common ports...")
+        warn(f"WHOIS failed: {e}")
     
-    ports = [21, 22, 23, 25, 53, 80, 110, 143, 443, 465, 587, 993, 995,
-             1433, 1521, 3306, 3389, 5432, 5900, 6379, 8080, 8443, 9200, 27017]
+    # ── 2. Subdomain Enumeration ───────────────────────────────────────
+    section("2/8 | SUBDOMAIN ENUMERATION")
+    found_subs = set()
     
-    try:
-        ip = socket.gethostbyname(domain)
-        open_ports = []
-        for port in ports:
-            try:
-                sock = socket.socket()
-                sock.settimeout(1)
-                if sock.connect_ex((ip, port)) == 0:
-                    service = {21:'FTP',22:'SSH',23:'Telnet',25:'SMTP',80:'HTTP',
-                              443:'HTTPS',3306:'MySQL',3389:'RDP',5432:'PostgreSQL',
-                              8080:'HTTP-Alt',8443:'HTTPS-Alt'}.get(port, 'Unknown')
-                    open_ports.append(port)
-                    highlight(f"  OPEN: {port}/tcp ({service})")
-                sock.close()
-            except: pass
-        success(f"Found {len(open_ports)} open ports")
-    except Exception as e:
-        error(f"Scan error: {e}")
-
-def tool_cors(domain):
-    header("CORS MISCONFIGURATION CHECK")
-    info(f"Target: {domain}")
+    # Tool-based
+    if check_tool('subfinder', 'subfinder -version'):
+        log("Running subfinder...")
+        try:
+            out = subprocess.run(f"subfinder -d {domain} -silent", 
+                              shell=True, capture_output=True, timeout=60)
+            for line in out.stdout.decode().strip().split('\n'):
+                if line.strip():
+                    found_subs.add(line.strip())
+                    log(f"  {c('G','+')} {line.strip()}")
+        except Exception as e:
+            warn(f"subfinder error: {e}")
     
+    if check_tool('amass', 'amass enum -version'):
+        log("Running amass...")
+        try:
+            out = subprocess.run(f"amass enum -passive -d {domain}", 
+                              shell=True, capture_output=True, timeout=120)
+            for line in out.stdout.decode().strip().split('\n'):
+                if line.strip() and '.' in line.strip():
+                    found_subs.add(line.strip())
+                    log(f"  {c('G','+')} {line.strip()}")
+        except Exception as e:
+            warn(f"amass error: {e}")
+    
+    if check_tool('assetfinder', 'assetfinder --version'):
+        log("Running assetfinder...")
+        try:
+            out = subprocess.run(f"assetfinder {domain}", 
+                              shell=True, capture_output=True, timeout=60)
+            for line in out.stdout.decode().strip().split('\n'):
+                if line.strip():
+                    found_subs.add(line.strip())
+        except: pass
+    
+    # Built-in wordlist scan
+    log("Running built-in subdomain scan...")
+    sub_wordlist = ['www','api','dev','staging','app','admin','blog','shop',
+                    'cdn','mail','ftp','vpn','dns','backup','test','demo',
+                    'legacy','old','v1','v2','console','dashboard','secure',
+                    'auth','login','register','status','monitor','assets',
+                    'static','media','img','files','storage','m','mx','smtp']
+    
+    def check_sub(word):
+        sub = f"{word}.{domain}"
+        try:
+            ip = socket.gethostbyname(sub)
+            return (sub, ip)
+        except:
+            return None
+    
+    with ThreadPoolExecutor(max_workers=20) as ex:
+        futures = [ex.submit(check_sub, w) for w in sub_wordlist]
+        for f in futures:
+            r = f.result()
+            if r:
+                found_subs.add(r[0])
+                log(f"  {c('G','+')} {r[0]} → {r[1]}")
+    
+    results['subdomains'] = list(found_subs)
+    log(f"Total subdomains found: {len(found_subs)}")
+    
+    # ── 3. Port Scan ──────────────────────────────────────────────────
+    section("3/8 | PORT SCANNING")
+    if check_tool('nmap', 'nmap --version'):
+        log("Running Nmap scan (top 100 ports)...")
+        try:
+            out = subprocess.run(
+                f"nmap -T4 -F --open -sV {domain} -oG -",
+                shell=True, capture_output=True, timeout=120
+            )
+            for line in out.stdout.decode().split('\n'):
+                m = re.search(r'Ports: ([^/]+)/', line)
+                if m:
+                    log(f"  {c('G','+')} {m.group(1)}")
+        except Exception as e:
+            warn(f"nmap error: {e}")
+    else:
+        log("Nmap not available, using built-in port scan...")
+        common_ports = {21:'FTP',22:'SSH',23:'Telnet',25:'SMTP',53:'DNS',
+                        80:'HTTP',110:'POP3',143:'IMAP',443:'HTTPS',
+                        445:'SMB',465:'SMTPS',587:'SMTP-TLS',993:'IMAPS',
+                        995:'POP3S',1433:'MSSQL',1521:'Oracle',3306:'MySQL',
+                        3389:'RDP',5432:'PostgreSQL',5900:'VNC',6379:'Redis',
+                        8080:'HTTP-Alt',8443:'HTTPS-Alt',9200:'Elasticsearch'}
+        ip = results['ip']
+        if ip:
+            for port, svc in common_ports.items():
+                try:
+                    sock = socket.socket()
+                    sock.settimeout(1)
+                    if sock.connect_ex((ip, port)) == 0:
+                        results['open_ports'].append(port)
+                        log(f"  {c('G','OPEN')} {port}/tcp ({svc})")
+                    sock.close()
+                except: pass
+    
+    # ── 4. Technology Detection ─────────────────────────────────────────
+    section("4/8 | TECHNOLOGY DETECTION")
     try:
         url = f"http://{domain}" if not domain.startswith('http') else domain
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, timeout=10, verify=False)
+        headers = dict(r.headers)
+        
+        # Detect CMS/Framework
+        content = r.text.lower()
+        techs = []
+        
+        cms_map = {
+            'WordPress': ['wp-content','wp-includes','wordpress','wp-json'],
+            'Joomla': ['joomla', '/media/jui/', 'option=com'],
+            'Drupal': ['drupal', 'sites/default'],
+            'Laravel': ['laravel_session', 'XSRF-TOKEN'],
+            'React': ['react', '__next/static', '__NEXT_DATA__'],
+            'Vue': ['vue', '__nuxt'],
+            'Next.js': ['_next/static', '__NEXT_DATA__'],
+            'Django': ['csrftoken', 'django'],
+            'Angular': ['ng-component', 'angular', '@angular'],
+            'jQuery': ['jquery'],
+            'Bootstrap': ['bootstrap'],
+            'Tailwind': ['tailwind'],
+            'Node.js': ['node', 'express'],
+            'PHP': ['php', '.php'],
+            'Apache': ['apache'],
+            'Nginx': ['nginx'],
+        }
+        
+        for tech, sigs in cms_map.items():
+            if any(s in content for s in sigs):
+                techs.append(tech)
+                log(f"  {c('G','+')} {tech}")
+        
+        # Security headers
+        sec_headers = ['X-Frame-Options','X-Content-Type-Options',
+                       'Strict-Transport-Security','Content-Security-Policy',
+                       'X-XSS-Protection']
+        log(f"\n  {c('BOLD','Security Headers:')}")
+        for h in sec_headers:
+            if h.lower() in [x.lower() for x in headers.keys()]:
+                log(f"    {c('G','✓')} {h}: Present")
+            else:
+                log(f"    {c('R','✗')} {h}: MISSING")
+        
+        results['tech'] = techs
+    except Exception as e:
+        warn(f"Tech detection error: {e}")
+    
+    # ── 5. Nuclei Scan ─────────────────────────────────────────────────
+    section("5/8 | NUCLEI VULNERABILITY SCAN")
+    if check_tool('nuclei', 'nuclei -version'):
+        log("Running Nuclei scan (critical + high templates)...")
+        nuclei_out = OUTPUT_DIR / f"nuclei_{domain_safe}_{ts}.txt"
+        try:
+            cmd = f"nuclei -u http://{domain} -t critical,high -silent -o {nuclei_out} -stats"
+            log(f"Command: {cmd}")
+            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            for line in iter(proc.stdout.readline, b''):
+                l = line.decode().strip()
+                if l:
+                    log(l)
+            proc.wait()
+            if nuclei_out.exists():
+                with open(nuclei_out) as f:
+                    lines = f.readlines()
+                    log(f"Nuclei found {len(lines)} issues")
+                    for l in lines[:10]:
+                        results['vulnerabilities'].append(l.strip())
+        except Exception as e:
+            warn(f"Nuclei error: {e}")
+    else:
+        warn("Nuclei not installed. Install: https://github.com/projectdiscovery/nuclei")
+        log("Running built-in vulnerability checks instead...")
+        # Built-in checks
+        try:
+            url = f"http://{domain}"
+            # Check for common issues
+            r = requests.get(url, timeout=10, verify=False)
+            
+            # CORS
+            acao = r.headers.get('Access-Control-Allow-Origin','')
+            if acao == '*':
+                results['vulnerabilities'].append(f"CORS MISCONFIG: Wildcard origin (*)")
+                log(f"  {c('R','!')} CORS: Wildcard origin (*)")
+            
+            # Server version disclosure
+            server = r.headers.get('Server','')
+            if server and not any(x in server for x in ['nginx','apache','cloudflare']):
+                results['vulnerabilities'].append(f"SERVER INFO: {server} disclosed")
+                log(f"  {c('Y','!')} Server version disclosed: {server}")
+            
+            # X-Content-Type-Options
+            if 'X-Content-Type-Options' not in r.headers:
+                log(f"  {c('Y','!')} X-Content-Type-Options: MISSING")
+            
+            # Check directory listing
+            if 'Index of' in r.text or '<title>Index of' in r.text:
+                results['vulnerabilities'].append("DIRECTORY LISTING: Enabled")
+                log(f"  {c('R','!')} Directory listing enabled")
+                
+        except Exception as e:
+            warn(f"Basic scan error: {e}")
+    
+    # ── 6. SQLMap Scan ─────────────────────────────────────────────────
+    section("6/8 | SQLMAP SCAN")
+    if check_tool('sqlmap', 'sqlmap --version'):
+        log("Running SQLMap scan (fast mode)...")
+        sqlmap_out = OUTPUT_DIR / f"sqlmap_{domain_safe}_{ts}.txt"
+        try:
+            # Check for params first
+            parsed_url = urllib.parse.urlparse(url if '://' in url else f"http://{domain}")
+            if parsed_url.query:
+                cmd = f"sqlmap -u '{domain}?{parsed_url.query}' --batch --level=1 --risk=1 --silent -o"
+                log(f"Testing: {domain}?{parsed_url.query}")
+                log("Note: SQLMap runs in background. Check sqlmap directory for results.")
+                try:
+                    out = subprocess.run(cmd, shell=True, capture_output=True, timeout=120)
+                    output = out.stdout.decode() + out.stderr.decode()
+                    if 'vulnerable' in output.lower() or 'injection' in output.lower():
+                        results['vulnerabilities'].append("SQL INJECTION: Possible")
+                        log(f"  {c('R','!')} Possible SQL Injection detected")
+                    else:
+                        log("SQLMap scan complete (no obvious injection found)")
+                except Exception as e:
+                    warn(f"SQLMap error: {e}")
+            else:
+                log("No query parameters found. Add ?param=value to URL for SQLi testing.")
+        except Exception as e:
+            warn(f"SQLMap error: {e}")
+    else:
+        warn("SQLMap not installed. Install: pip install sqlmap or sudo apt install sqlmap")
+    
+    # ── 7. Directory/Content Fuzz ───────────────────────────────────────
+    section("7/8 | DIRECTORY FUZZING")
+    if check_tool('ffuf', 'ffuf -V'):
+        log("Running ffuf fuzzing...")
+        ffuf_out = OUTPUT_DIR / f"ffuf_{domain_safe}_{ts}.txt"
+        try:
+            # Common dirs
+            cmd = f"ffuf -u http://{domain}/FUZZ -w /usr/share/wordlists/dirb/common.txt -mc 200,204,301,302,307,401,403 -t 50 -silent -o {ffuf_out}"
+            proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            found_dirs = []
+            for line in iter(proc.stdout.readline, b''):
+                l = line.decode().strip()
+                if l and 'html' not in l.lower():
+                    log(f"  {c('G','+')} {l}")
+                    found_dirs.append(l)
+            proc.wait()
+            log(f"ffuf found {len(found_dirs)} accessible paths")
+        except Exception as e:
+            warn(f"ffuf error: {e}")
+    else:
+        log("ffuf not installed. Running built-in dirbust...")
+        common_dirs = ['admin','login','dashboard','api','backup','wp-admin',
+                       'administrator','phpmyadmin','server-status','.env',
+                       '.git','robots.txt','sitemap.xml','actuator','env',
+                       'config','api/v1','console','status','health']
+        for d in common_dirs:
+            try:
+                r = requests.head(f"http://{domain}/{d}", timeout=3, allow_redirects=False)
+                if r.status_code == 200:
+                    log(f"  {c('G','+')} /{d} (200 OK)")
+                    results['urls'].append(f"http://{domain}/{d}")
+                elif r.status_code in (301,302,307,308):
+                    loc = r.headers.get('Location','')
+                    log(f"  {c('Y','~')} /{d} -> {r.status_code} ({loc[:40]})")
+            except: pass
+    
+    # ── 8. Wayback & JS Analysis ───────────────────────────────────────
+    section("8/8 | WAYBACK & JS ANALYSIS")
+    try:
+        log("Querying Wayback Machine...")
+        wb_url = f"https://web.archive.org/cdx/search/cdx?url=*.{domain}/*&output=json&fl=original&limit=30"
+        r = requests.get(wb_url, timeout=15)
+        if r.status_code == 200:
+            try:
+                data = r.json()
+                if len(data) > 1:
+                    for row in data[1:]:
+                        if row and row[0]:
+                            log(f"  {c('C','↗')} {row[0][:80]}")
+                            results['urls'].append(row[0])
+            except: pass
+    except Exception as e:
+        warn(f"Wayback error: {e}")
+    
+    # JS file scanner
+    try:
+        log("\nScanning JS files for secrets...")
+        base_url = f"http://{domain}" if not '://' in domain else domain
+        r = requests.get(base_url, timeout=10, verify=False)
+        js_files = re.findall(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', r.text)
+        
+        secret_patterns = {
+            'AWS Key': r'AKIA[0-9A-Z]{16}',
+            'Google API': r'AIza[0-9A-Za-z\-_]{35}',
+            'Slack Token': r'xox[baprs]-[0-9a-zA-Z\-]+',
+            'GitHub Token': r'gh[pousr]_[A-Za-z0-9_]{36,255}',
+            'Generic API Key': r'["\'][aA][pP][iI]_?[kK][eE][yY]["\']',
+            'Bearer Token': r'[Bb]earer\s+[0-9a-zA-Z_\-\.]+',
+        }
+        
+        for js_url in js_files[:5]:
+            full_url = js_url if js_url.startswith('http') else base_url.rstrip('/') + '/' + js_url.lstrip('/')
+            try:
+                jr = requests.get(full_url, timeout=5, verify=False)
+                for name, pattern in secret_patterns.items():
+                    if re.search(pattern, jr.text):
+                        results['secrets'].append(f"{name} in {js_url}")
+                        log(f"  {c('R','!')} Possible {name} in {js_url[:50]}")
+            except: pass
+    except Exception as e:
+        warn(f"JS scan error: {e}")
+    
+    # ── Summary ─────────────────────────────────────────────────────────
+    section("AUTO RECON COMPLETE — SUMMARY")
+    print("""
+  {c('BOLD','Target:')}       {domain}
+  {c('BOLD','IP Address:')}   {results['ip']}
+  {c('BOLD','Subdomains:')}    {len(results['subdomains'])} found
+  {c('BOLD','Open Ports:')}   {len(results['open_ports'])} found
+  {c('BOLD','Technologies:')} {', '.join(results['tech']) if results['tech'] else 'Unknown'}
+  {c('BOLD','Vulns:')}        {len(results['vulnerabilities'])} found
+  {c('BOLD','URLs:')}         {len(results['urls'])} found
+  {c('BOLD','Secrets:')}      {len(results['secrets'])} found
+""")
+    
+    # Save report
+    report = '\n'.join(report_lines)
+    save_report(domain, report)
+    
+    if results['vulnerabilities']:
+        print(f"  {c('BOLD',c('R','⚠ VULNERABILITIES FOUND:'))}")
+        for v in results['vulnerabilities'][:20]:
+            print(f"    {c('R','•')} {v}")
+    
+    ok(f"Full report saved to: {report_file}")
+    return results
+
+# ─── Manual Recon Modules ─────────────────────────────────────────────────
+
+def mod_subdomains():
+    domain = inp("Target domain")
+    if not domain: return
+    
+    step("Subdomain Enumeration")
+    info(f"Target: {domain}")
+    
+    found = []
+    
+    # subfinder
+    if check_tool('subfinder', 'subfinder -version'):
+        info("Running subfinder...")
+        try:
+            out = subprocess.run(f"subfinder -d {domain} -silent", 
+                              shell=True, capture_output=True, timeout=60)
+            for line in out.stdout.decode().strip().split('\n'):
+                if line.strip():
+                    found.append(line.strip())
+                    highlight(f"  + {line.strip()}")
+        except: pass
+    
+    # amass
+    if check_tool('amass', 'amass enum -version'):
+        info("Running amass...")
+        try:
+            out = subprocess.run(f"amass enum -passive -d {domain}", 
+                              shell=True, capture_output=True, timeout=120)
+            for line in out.stdout.decode().strip().split('\n'):
+                if line.strip() and '.' in line.strip():
+                    if line.strip() not in found:
+                        found.append(line.strip())
+                        highlight(f"  + {line.strip()}")
+        except: pass
+    
+    # wordlist scan
+    info("Running wordlist scan...")
+    subs = ['www','api','dev','staging','app','admin','blog','shop','cdn',
+            'mail','ftp','vpn','backup','test','demo','legacy','old',
+            'v1','v2','console','dashboard','secure','auth','login']
+    def check_s(sub):
+        try:
+            ip = socket.gethostbyname(f"{sub}.{domain}")
+            return (f"{sub}.{domain}", ip)
+        except: return None
+    
+    with ThreadPoolExecutor(max_workers=20) as ex:
+        for r in ex.map(check_s, subs):
+            if r:
+                found.append(r[0])
+                highlight(f"  + {r[0]} → {r[1]}")
+    
+    ok(f"Total: {len(found)} subdomains")
+    return found
+
+def mod_nuclei():
+    domain = inp("Target URL (http://...)")
+    if not domain: return
+    
+    if not domain.startswith('http'):
+        domain = f"http://{domain}"
+    
+    step("Nuclei Vulnerability Scanner")
+    info(f"Target: {domain}")
+    info("Templates: critical + high severity")
+    
+    templates = inp("Templates [1=Critical+High, 2=All, 3=Custom]") or "1"
+    
+    if templates == "1":
+        t_flag = "-t critical,high"
+    elif templates == "2":
+        t_flag = ""
+    else:
+        t_dir = inp("Template directory path")
+        t_flag = f"-t {t_dir}" if t_dir else "-t critical,high"
+    
+    out_file = OUTPUT_DIR / f"nuclei_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    cmd = f"nuclei -u {domain} {t_flag} -silent -o {out_file}"
+    
+    info(f"Running: {cmd}")
+    info("Scanning... (this may take a few minutes)")
+    
+    try:
+        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        vuln_count = 0
+        for line in iter(proc.stdout.readline, b''):
+            l = line.decode().strip()
+            if l:
+                print(f"  {c('Y','↗')} {l}")
+                vuln_count += 1
+        proc.wait()
+        
+        if vuln_count > 0:
+            ok(f"Nuclei found {vuln_count} vulnerabilities")
+        else:
+            info("No vulnerabilities found by Nuclei")
+        
+        if out_file.exists():
+            ok(f"Results saved to: {out_file}")
+    except Exception as e:
+        error(f"Nuclei error: {e}")
+
+def mod_sqlmap():
+    url = inp("Target URL with params (e.g. http://site.com/page.php?id=1)")
+    if not url: return
+    
+    if not url.startswith('http'):
+        url = f"http://{url}"
+    
+    step("SQLMap SQL Injection Scanner")
+    info(f"Target: {url}")
+    
+    level = inp("Scan level [1=Quick, 2=Medium, 3=Deep]") or "1"
+    risk = inp("Risk level [1=Safe, 2=Moderate, 3=High]") or "1"
+    
+    level_map = {'1':'--level=1','2':'--level=2','3':'--level=3'}
+    risk_map = {'1':'--risk=1','2':'--risk=2','3':'--risk=3'}
+    
+    cmd = f"sqlmap -u '{url}' --batch {level_map.get(level,'--level=1')} {risk_map.get(risk,'--risk=1')} -o"
+    
+    info(f"Running: {cmd}")
+    info("SQLMap scan running... (may take 5-30 minutes)")
+    info("Output saved to: ~/.sqlmap/output/")
+    
+    try:
+        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        found = False
+        for line in iter(proc.stdout.readline, b''):
+            l = line.decode().strip()
+            if l:
+                if any(x in l.lower() for x in ['injection','vulnerable','error']):
+                    print(f"  {c('R','!')} {l}")
+                    found = True
+                elif len(l) < 100:
+                    print(f"  {c('D',l[:80])}")
+        proc.wait()
+        if found:
+            warn("SQL Injection may be present! Manual verification needed.")
+        else:
+            ok("SQLMap scan complete. No obvious injection detected.")
+    except Exception as e:
+        error(f"SQLMap error: {e}")
+
+def mod_ffuf():
+    domain = inp("Target domain (e.g. example.com)")
+    if not domain: return
+    
+    if not domain.startswith('http'):
+        domain = f"http://{domain}"
+    
+    step("FFUF Directory Fuzzing")
+    info(f"Target: {domain}")
+    
+    wordlist = inp("Wordlist [/usr/share/wordlists/dirb/common.txt]") or "/usr/share/wordlists/dirb/common.txt"
+    threads = inp("Threads [50]") or "50"
+    
+    out_file = OUTPUT_DIR / f"ffuf_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    cmd = f"ffuf -u {domain}/FUZZ -w {wordlist} -mc 200,204,301,302,307,401,403 -t {threads} -silent -o {out_file} -of json"
+    
+    info(f"Running ffuf...")
+    info("Press Ctrl+C to stop early")
+    
+    try:
+        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        found = []
+        for line in iter(proc.stdout.readline, b''):
+            l = line.decode().strip()
+            if l and 'html' not in l.lower():
+                highlight(f"  + {l}")
+                found.append(l)
+        proc.wait()
+        
+        ok(f"Found {len(found)} accessible paths")
+        if out_file.exists():
+            ok(f"Results: {out_file}")
+    except KeyboardInterrupt:
+        info("Stopped by user")
+    except Exception as e:
+        error(f"ffuf error: {e}")
+
+def mod_cve():
+    step("CVE Search (NVD)")
+    print("""
+  [1] Search by Keyword (e.g. xss, sql injection)
+  [2] Search by Year (e.g. 2024)
+  [3] Search by Keyword + Year
+  [4] Lookup specific CVE ID (e.g. CVE-2024-1234)
+""")
+    
+    opt = inp_int("Option", 1, 4)
+    
+    if opt == 1:
+        kw = inp("Keyword")
+        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={urllib.parse.quote(kw)}"
+    elif opt == 2:
+        yr = inp("Year")
+        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?pubStartDate={yr}-01-01T00:00:00.000&pubEndDate={yr}-12-31T23:59:59.999"
+    elif opt == 3:
+        kw = inp("Keyword")
+        yr = inp("Year")
+        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={urllib.parse.quote(kw)}&pubStartDate={yr}-01-01T00:00:00.000&pubEndDate={yr}-12-31T23:59:59.999"
+    elif opt == 4:
+        cve_id = inp("CVE ID")
+        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve_id.upper()}"
+    
+    info(f"Querying NVD... (may take a few seconds)")
+    
+    try:
+        r = requests.get(url, timeout=20)
+        if r.status_code == 200:
+            data = r.json()
+            vulns = data.get('vulnerabilities', [])
+            ok(f"Found {len(vulns)} results")
+            
+            for v in vulns[:20]:
+                cve = v.get('cve', {})
+                cid = cve.get('id', 'N/A')
+                desc = cve.get('descriptions', [{}])
+                desc_text = desc[0].get('value', 'N/A')[:100] if desc else 'N/A'
+                
+                severity = 'N/A'
+                metrics = cve.get('metrics', {})
+                if metrics:
+                    cvss = metrics.get('cvssMetricV31', metrics.get('cvssMetricV30', []))
+                    if cvss:
+                        severity = cvss[0].get('cvssData', {}).get('baseSeverity', 'N/A')
+                
+                sev_c = {'CRITICAL': 'R', 'HIGH': 'Y', 'MEDIUM': 'Y', 'LOW': 'G'}.get(severity, 'D')
+                print(f"\n  {c(sev_c,c('BOLD',cid))} [{severity}]")
+                print(f"  {c('D',desc_text)}")
+        else:
+            error(f"NVD API error: {r.status_code}")
+    except Exception as e:
+        error(f"Search error: {e}")
+
+def mod_ssrf():
+    url = inp("Target URL with param (e.g. http://site.com?url=)")
+    if not url: return
+    
+    step("SSRF Scanner")
+    info(f"Target: {url}")
+    
+    payloads = [
+        ('http://localhost', 'localhost'),
+        ('http://127.0.0.1', 'localhost IP'),
+        ('http://169.254.169.254', 'AWS metadata'),
+        ('http://0.0.0.0', 'zero'),
+        ('file:///etc/passwd', 'LFI via file://'),
+    ]
+    
+    found = []
+    for payload, desc in payloads:
+        try:
+            test_url = f"{url}{urllib.parse.quote(payload)}"
+            r = requests.get(test_url, timeout=5, allow_redirects=False)
+            
+            # Check for SSRF indicators
+            resp_lower = r.text.lower()
+            if any(x in resp_lower for x in ['root:', 'bin/bash', 'ec2', 'ami-id', 'metadata']):
+                highlight(f"  {c('R','[!]')} SSRF Triggered: {desc} -> {payload[:40]}")
+                found.append((desc, payload))
+            else:
+                result(f"  - {payload[:50]}... no response")
+        except Exception as ex:
+            highlight(f"  {c('Y','[~]')} {desc}: {str(ex)[:50]}")
+    
+    if found:
+        ok(f"SSRF triggers found: {len(found)}")
+    else:
+        info("No obvious SSRF triggers detected")
+
+def mod_xss():
+    url = inp("Target URL with param (e.g. http://site.com?q=)")
+    if not url: return
+    
+    step("XSS Scanner")
+    info(f"Target: {url}")
+    
+    payloads = [
+        '<script>alert(1)</script>',
+        '<img src=x onerror=alert(1)>',
+        '<svg onload=alert(1)>',
+        '"><script>alert(1)</script>',
+        "'onclick=alert(1)//",
+        '<iframe src="javascript:alert(1)">',
+        '{{constructor.constructor("alert(1)")()}}',
+    ]
+    
+    parsed = urllib.parse.urlparse(url)
+    base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    params = dict(urllib.parse.parse_qsl(parsed.query))
+    
+    if not params:
+        warn("No parameters found in URL")
+        return
+    
+    for name, val in params.items():
+        info(f"Testing param: {name}")
+        for payload in payloads:
+            try:
+                test_params = {name: payload}
+                r = requests.get(base, params=test_params, timeout=5)
+                
+                # Simple reflection check
+                if payload in r.text:
+                    highlight(f"  {c('R','[!]')} XSS REFLECTED: {name}={payload[:40]}")
+                    highlight(f"      Payload reflected in response!")
+                else:
+                    result(f"  - {payload[:40]}... filtered")
+            except: pass
+    
+    ok("XSS scan complete")
+
+def mod_sqli():
+    url = inp("Target URL with param (e.g. http://site.com?id=1)")
+    if not url: return
+    
+    step("SQL Injection Scanner")
+    info(f"Target: {url}")
+    
+    payloads = [
+        "'", '"', "' OR '1'='1", '" OR "1"="1',
+        "' OR 1=1--", "' UNION SELECT NULL--",
+        "1' AND '1'='1", "1\" AND \"1\"=\"1",
+    ]
+    
+    error_patterns = [
+        'sql', 'mysql', 'syntax error', 'warning',
+        'sqlite', 'postgres', 'oracle', 'microsoft sql',
+        'odbc', 'sqlstate', 'sqlsrv'
+    ]
+    
+    parsed = urllib.parse.urlparse(url)
+    base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    params = dict(urllib.parse.parse_qsl(parsed.query))
+    
+    if not params:
+        warn("No parameters found in URL")
+        return
+    
+    found_sqli = []
+    for name, val in params.items():
+        info(f"Testing param: {name}")
+        for payload in payloads:
+            try:
+                test_params = {name: payload}
+                r = requests.get(base, params=test_params, timeout=5)
+                resp = r.text.lower()
+                
+                if any(ep in resp for ep in error_patterns):
+                    highlight(f"  {c('R','[!]')} SQL ERROR: {name}={payload}")
+                    highlight(f"      Error pattern detected in response")
+                    found_sqli.append((name, payload))
+                else:
+                    # Check for boolean-based
+                    orig = requests.get(base, params={name: val}, timeout=5)
+                    mod = requests.get(base, params={name: f"{val} AND 1=1"}, timeout=5)
+                    if orig.status_code == mod.status_code and len(orig.text) != len(mod.text):
+                        highlight(f"  {c('Y','[~]')} Possible boolean-based SQLi: {name}={payload}")
+            except: pass
+    
+    if found_sqli:
+        warn(f"Potential SQL injection found: {len(found_sqli)}")
+    else:
+        info("No obvious SQL injection detected")
+
+def mod_lfi():
+    url = inp("Target URL with param (e.g. http://site.com?file=)")
+    if not url: return
+    
+    step("LFI Scanner (Local File Inclusion)")
+    info(f"Target: {url}")
+    
+    payloads = [
+        '/etc/passwd',
+        '../etc/passwd',
+        '....//....//etc/passwd',
+        '../../etc/passwd',
+        '/etc/hosts',
+        '../etc/hosts',
+        '/proc/self/environ',
+        '/proc/cmdline',
+        '/proc/version',
+        '..%2F..%2Fetc%2Fpasswd',
+    ]
+    
+    parsed = urllib.parse.urlparse(url)
+    base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    params = dict(urllib.parse.parse_qsl(parsed.query))
+    
+    if not params:
+        warn("No parameters found")
+        return
+    
+    for name, val in params.items():
+        info(f"Testing param: {name}")
+        for payload in payloads:
+            try:
+                test_params = {name: payload}
+                r = requests.get(base, params=test_params, timeout=5)
+                
+                if 'root:x:' in r.text or '/bin/' in r.text:
+                    highlight(f"  {c('R','[!]')} LFI FOUND: {name}={payload}")
+                    highlight(f"      /etc/passwd content leaked!")
+                elif any(x in r.text.lower() for x in ['localhost', 'hostname', 'amazon']):
+                    highlight(f"  {c('Y','[~]')} LFI Possible: {name}={payload}")
+            except: pass
+    
+    ok("LFI scan complete")
+
+def mod_cmd_injection():
+    url = inp("Target URL with param (e.g. http://site.com?cmd=)")
+    if not url: return
+    
+    step("Command Injection Scanner")
+    info(f"Target: {url}")
+    
+    payloads = [
+        ';whoami', '|whoami', '&&whoami',
+        ';id', '|id', '&&id',
+        ';ls', '|ls', '&&ls',
+        ';cat /etc/passwd', '|cat /etc/passwd',
+        '`whoami`', '$(whoami)',
+    ]
+    
+    indicators = ['root:', 'uid=', 'bin/', 'total ', '/home/']
+    
+    parsed = urllib.parse.urlparse(url)
+    base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    params = dict(urllib.parse.parse_qsl(parsed.query))
+    
+    if not params:
+        warn("No parameters found")
+        return
+    
+    for name, val in params.items():
+        info(f"Testing param: {name}")
+        for payload in payloads:
+            try:
+                test_params = {name: payload}
+                r = requests.get(base, params=test_params, timeout=5)
+                resp = r.text.lower()
+                
+                if any(ind in resp for ind in indicators):
+                    highlight(f"  {c('R','[!]')} COMMAND INJECTION: {name}={payload}")
+                    highlight(f"      Command output leaked!")
+            except: pass
+    
+    ok("Command injection scan complete")
+
+def mod_open_redirect():
+    url = inp("Target URL with param (e.g. http://site.com?redirect=)")
+    if not url: return
+    
+    step("Open Redirect Scanner")
+    info(f"Target: {url}")
+    
+    payloads = [
+        '//google.com',
+        '///google.com',
+        'https://google.com',
+        'javascript:alert(1)',
+        'data:text/html,<script>alert(1)</script>',
+    ]
+    
+    parsed = urllib.parse.urlparse(url)
+    base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    params = dict(urllib.parse.parse_qsl(parsed.query))
+    
+    if not params:
+        warn("No parameters found")
+        return
+    
+    for name, val in params.items():
+        info(f"Testing param: {name}")
+        for payload in payloads:
+            try:
+                test_params = {name: payload}
+                r = requests.get(base, params=test_params, timeout=5, allow_redirects=False)
+                loc = r.headers.get('Location', '')
+                
+                if loc and ('google' in loc.lower() or loc.startswith('//') or 'javascript' in loc):
+                    highlight(f"  {c('R','[!]')} OPEN REDIRECT: {name}={payload[:40]}")
+                    highlight(f"      Redirects to: {loc[:60]}")
+            except: pass
+    
+    ok("Open redirect scan complete")
+
+def mod_ssti():
+    url = inp("Target URL with param (e.g. http://site.com?tpl=)")
+    if not url: return
+    
+    step("SSTI Scanner (Server Side Template Injection)")
+    info(f"Target: {url}")
+    
+    payloads = [
+        '{{7*7}}',
+        '${7*7}',
+        '<%= 7*7 %>',
+        '{{config}}',
+        '{{request}}',
+        '{7*7}',
+        '*a*a*a*',
+    ]
+    
+    parsed = urllib.parse.urlparse(url)
+    base = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+    params = dict(urllib.parse.parse_qsl(parsed.query))
+    
+    if not params:
+        warn("No parameters found")
+        return
+    
+    for name, val in params.items():
+        info(f"Testing param: {name}")
+        for payload in payloads:
+            try:
+                test_params = {name: payload}
+                r = requests.get(base, params=test_params, timeout=5)
+                
+                # Check for template evaluation
+                checks = [('49', 'Jinja2/Twig'), ('7777777', 'ERB'), ('{{config}}', 'Angular')]
+                for check, engine in checks:
+                    if check in r.text:
+                        highlight(f"  {c('R','[!]')} SSTI FOUND: {name}={payload}")
+                        highlight(f"      Template engine: {engine}")
+            except: pass
+    
+    ok("SSTI scan complete")
+
+def mod_cors():
+    domain = inp("Target domain")
+    if not domain: return
+    if not domain.startswith('http'):
+        domain = f"http://{domain}"
+    
+    step("CORS Misconfiguration Check")
+    info(f"Target: {domain}")
+    
+    try:
+        r = requests.get(domain, timeout=10)
         
         acao = r.headers.get('Access-Control-Allow-Origin', 'Not Set')
         acac = r.headers.get('Access-Control-Allow-Credentials', 'Not Set')
+        acah = r.headers.get('Access-Control-Allow-Headers', 'Not Set')
+        acam = r.headers.get('Access-Control-Allow-Methods', 'Not Set')
         
-        result(f"Access-Control-Allow-Origin: {acao}")
-        result(f"Access-Control-Allow-Credentials: {acac}")
+        print(f"\n  {c('W','Access-Control-Allow-Origin:')} {acao}")
+        print(f"  {c('W','Access-Control-Allow-Credentials:')} {acac}")
+        print(f"  {c('W','Access-Control-Allow-Headers:')} {acah}")
+        print(f"  {c('W','Access-Control-Allow-Methods:')} {acam}")
         
         if acao == '*':
-            warn("VULNERABLE: CORS allows all origins (*)")
+            no("VULNERABLE: CORS allows all origins (*)")
         elif acao == 'null':
             warn("VULNERABLE: CORS allows null origin")
+        elif acac.lower() == 'true' and acao != domain:
+            no(f"VULNERABLE: Credentials allowed with origin: {acao}")
         else:
-            success("CORS appears properly configured")
+            ok("CORS configuration appears safe")
+            
     except Exception as e:
         error(f"Error: {e}")
 
-def tool_ssl(domain):
-    header("SSL CERTIFICATE CHECK")
-    info(f"Target: {domain}")
+def mod_whois():
+    domain = inp("Target domain")
+    if not domain: return
     
-    try:
-        host = domain.replace('https://','').replace('http://','').split('/')[0]
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
-        with socket.create_connection((host, 443), timeout=10) as sock:
-            with context.wrap_socket(sock, server_hostname=host) as ssock:
-                cipher = ssock.cipher()
-                cert = ssock.getpeercert(binary_form=True)
-                
-                highlight(f"Cipher: {cipher[0]} ({cipher[2]} bits)")
-                highlight(f"Protocol: {cipher[1]}")
-                
-                # Basic cert info
-                try:
-                    from OpenSSL import crypto
-                except:
-                    info("Install pyOpenSSL for detailed cert info: pip install pyOpenSSL")
-                    
-    except ssl.SSLError as e:
-        error(f"SSL Error: {e}")
-    except Exception as e:
-        error(f"Error: {e}")
-
-def tool_whois(domain):
-    header("WHOIS LOOKUP")
+    step("WHOIS Lookup")
     info(f"Target: {domain}")
     
     try:
@@ -246,291 +1142,155 @@ def tool_whois(domain):
             result(f"Created: {w.creation_date}")
         if w.expiration_date:
             result(f"Expires: {w.expiration_date}")
+        if w.updated_date:
+            result(f"Updated: {w.updated_date}")
         if w.name_servers:
-            for ns in (w.name_servers or [])[:5]:
-                result(f"NS: {ns}")
-        success("WHOIS lookup complete")
+            print(f"\n  {c('BOLD','Name Servers:')}")
+            for ns in (w.name_servers or [])[:8]:
+                result(f"    - {ns}")
+        if w.registrant:
+            print(f"\n  {c('BOLD','Registrant:')}")
+            for k, v in w.registrant.__dict__.items():
+                if v:
+                    result(f"    {k}: {v}")
+        ok("WHOIS lookup complete")
     except Exception as e:
         error(f"WHOIS error: {e}")
 
-def tool_cve(keyword=None, year=None, cve_id=None):
-    header("CVE SEARCH")
+def mod_ip_lookup():
+    ip = inp("IP Address")
+    if not ip: return
     
-    if cve_id:
-        info(f"Looking up: {cve_id}")
-        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve_id}"
-    elif keyword and year:
-        info(f"Searching: {keyword} ({year})")
-        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={keyword}&pubStartDate={year}-01-01T00:00:00.000&pubEndDate={year}-12-31T23:59:59.999"
-    elif keyword:
-        info(f"Searching: {keyword}")
-        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?keywordSearch={keyword}"
-    elif year:
-        info(f"All CVEs from {year}")
-        url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?pubStartDate={year}-01-01T00:00:00.000&pubEndDate={year}-12-31T23:59:59.999"
-    else:
-        warn("Need keyword, year, or CVE ID")
-        return
+    step("IP Geolocation Lookup")
+    info(f"Target: {ip}")
     
     try:
-        r = requests.get(url, timeout=15)
-        if r.status_code == 200:
-            data = r.json()
-            vulns = data.get('vulnerabilities', [])
-            info(f"Found {len(vulns)} results")
-            
-            for v in vulns[:10]:
-                cve = v.get('cve', {})
-                cve_id_str = cve.get('id', 'N/A')
-                desc = cve.get('descriptions', [{}])
-                desc_text = desc[0].get('value', 'No description')[:100] if desc else 'N/A'
-                
-                severity = 'UNKNOWN'
-                metrics = cve.get('metrics', {})
-                if metrics:
-                    cvss = metrics.get('cvssMetricV31', metrics.get('cvssMetricV30', []))
-                    if cvss:
-                        severity = cvss[0].get('cvssData', {}).get('baseSeverity', 'UNKNOWN')
-                
-                sev_color = {'CRITICAL': 'R', 'HIGH': 'Y', 'MEDIUM': 'Y', 'LOW': 'G'}.get(severity, 'D')
-                print(f"\n  {C[sev_color]}{cve_id_str}{C['RESET']} [{severity}]")
-                print(f"  {C['D']}{desc_text}...{C['RESET']}")
+        r = requests.get(
+            f"http://ip-api.com/json/{ip}?fields=status,country,countryCode,"
+            f"region,city,isp,org,as,lat,lon,timezone",
+            timeout=10
+        )
+        data = r.json()
+        
+        if data.get('status') == 'success':
+            fields = [
+                ('IP', 'query'), ('Country', 'country'), ('Code', 'countryCode'),
+                ('Region', 'regionName'), ('City', 'city'), ('ISP', 'isp'),
+                ('Org', 'org'), ('AS', 'as'), ('Coords', 'lat,lon'),
+                ('Timezone', 'timezone')
+            ]
+            for label, key in fields:
+                if key == 'lat,lon':
+                    result(f"  {label}: {data.get('lat')}, {data.get('lon')}")
+                else:
+                    result(f"  {label}: {data.get(key, 'N/A')}")
+            ok("IP lookup complete")
         else:
-            error(f"NVD API error: {r.status_code}")
+            error("IP lookup failed")
     except Exception as e:
-        error(f"Search error: {e}")
+        error(f"Error: {e}")
 
-def tool_sqli(url):
-    header("SQL INJECTION SCANNER")
-    info(f"Target: {url}")
+def mod_reverse_dns():
+    ip = inp("IP Address")
+    if not ip: return
     
-    # Basic SQLi payloads
-    payloads = ["'", '"', "' OR '1'='1", '" OR "1"="1', "' OR 1=1--", "' UNION SELECT NULL--"]
+    step("Reverse DNS Lookup")
+    info(f"Target: {ip}")
     
     try:
-        parsed = requests.utils.urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        params = dict(urllib.parse.parse_qsl(parsed.query))
-        
-        if not params:
-            info("No query parameters found. Try adding ?id=1 to URL")
-            return
-        
-        for name, val in params.items():
-            for payload in payloads:
-                test_params = {name: payload}
-                try:
-                    r = requests.get(base_url, params=test_params, timeout=5)
-                    resp = r.text.lower()
-                    
-                    # Simple detection
-                    errors = ['sql', 'mysql', 'syntax', 'error', 'warning', 'sqlite', 'postgres', 'oracle', 'microsoft sql', 'odbc']
-                    if any(e in resp for e in errors):
-                        highlight(f"  [!] Potential SQLi: {name}={payload}")
-                        highlight(f"      Error detected in response")
-                    else:
-                        result(f"  - {name}={payload[:30]}... OK")
-                except:
-                    pass
-        
-        success("SQLi scan complete")
+        host, aliases, addrs = socket.gethostbyaddr(ip)
+        highlight(f"Hostname: {host}")
+        for alias in aliases:
+            result(f"Alias: {alias}")
+        for addr in addrs:
+            result(f"Address: {addr}")
+        ok("Reverse DNS complete")
     except Exception as e:
-        error(f"Scan error: {e}")
+        error(f"No reverse DNS: {e}")
 
-def tool_xss(url):
-    header("XSS SCANNER")
-    info(f"Target: {url}")
+def mod_port_scan():
+    domain = inp("Target domain or IP")
+    if not domain: return
     
-    payloads = ['<script>alert(1)</script>', '<img src=x onerror=alert(1)>', 
-                '<svg onload=alert(1)>', '"><script>alert(1)</script>',
-                "'onclick=alert(1)//"]
+    step("Port Scan")
+    info(f"Target: {domain}")
+    
+    info("Scanning common ports...")
+    
+    common = {
+        21:'FTP', 22:'SSH', 23:'Telnet', 25:'SMTP', 53:'DNS',
+        80:'HTTP', 110:'POP3', 143:'IMAP', 443:'HTTPS',
+        445:'SMB', 465:'SMTPS', 587:'SMTP-TLS', 993:'IMAPS',
+        995:'POP3S', 1433:'MSSQL', 1521:'Oracle', 3306:'MySQL',
+        3389:'RDP', 5432:'PostgreSQL', 5900:'VNC', 6379:'Redis',
+        8080:'HTTP-Alt', 8443:'HTTPS-Alt', 9200:'Elasticsearch',
+        27017:'MongoDB', 11211:'Memcached'
+    }
     
     try:
-        parsed = requests.utils.urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        params = dict(urllib.parse.parse_qsl(parsed.query))
-        
-        if not params:
-            info("No query parameters found. Try adding ?q=test to URL")
-            return
-        
-        for name, val in params.items():
-            for payload in payloads:
-                test_params = {name: payload}
-                try:
-                    r = requests.get(base_url, params=test_params, timeout=5)
-                    if payload in r.text:
-                        highlight(f"  [!] XSS FOUND: {name}={payload[:40]}")
-                    else:
-                        result(f"  - {name}={payload[:30]}... filtered")
-                except:
-                    pass
-        
-        success("XSS scan complete")
-    except Exception as e:
-        error(f"Scan error: {e}")
+        ip = socket.gethostbyname(domain) if not is_valid_ip(domain) else domain
+        info(f"Resolved: {ip}")
+    except:
+        ip = domain
+    
+    open_ports = []
+    for port, svc in common.items():
+        try:
+            sock = socket.socket()
+            sock.settimeout(1)
+            if sock.connect_ex((ip, port)) == 0:
+                open_ports.append((port, svc))
+                highlight(f"  {c('G','OPEN')} {port}/tcp → {svc}")
+            sock.close()
+        except: pass
+    
+    ok(f"Scan complete. {len(open_ports)} open ports found.")
 
-def tool_ssrf(url):
-    header("SSRF SCANNER")
-    info(f"Target: {url}")
-    
-    payloads = ['http://localhost', 'http://127.0.0.1', 'http://169.254.169.254',
-                'file:///etc/passwd', 'http://internal.aws.ec2@169.254.169.254']
-    
+def is_valid_ip(ip):
     try:
-        parsed = requests.utils.urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        params = dict(urllib.parse.parse_qsl(parsed.query))
-        
-        if not params:
-            info("No query parameters found")
-            return
-        
-        for name, val in params.items():
-            for payload in payloads:
-                test_params = {name: payload}
-                try:
-                    r = requests.get(base_url, params=test_params, timeout=5, allow_redirects=False)
-                    if r.status_code in (300, 301, 302):
-                        highlight(f"  [!] Possible SSRF: {name}={payload}")
-                        result(f"      Redirect to: {r.headers.get('Location', 'N/A')}")
-                except Exception as ex:
-                    highlight(f"  [!] SSRF Triggered: {payload} -> {ex}")
-        
-        success("SSRF scan complete")
-    except Exception as e:
-        error(f"Scan error: {e}")
+        ipaddress.ip_address(ip)
+        return True
+    except: return False
 
-def tool_open_redirect(url):
-    header("OPEN REDIRECT SCANNER")
-    info(f"Target: {url}")
+def mod_s3_bucket():
+    domain = inp("Target domain")
+    if not domain: return
     
-    payloads = ['//google.com', '///google.com', 'https://google.com',
-                'javascript:alert(1)', 'data:text/html,<script>alert(1)</script>']
+    step("S3 Bucket Finder")
+    info(f"Target: {domain}")
     
-    try:
-        parsed = requests.utils.urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        params = dict(urllib.parse.parse_qsl(parsed.query))
-        
-        if not params:
-            info("No query parameters found")
-            return
-        
-        for name, val in params.items():
-            for payload in payloads:
-                test_params = {name: payload}
-                try:
-                    r = requests.get(base_url, params=test_params, timeout=5, allow_redirects=False)
-                    loc = r.headers.get('Location', '')
-                    if loc and ('google' in loc or 'javascript' in loc or loc.startswith('//')):
-                        highlight(f"  [!] OPEN REDIRECT: {name}={payload}")
-                except:
-                    pass
-        
-        success("Open redirect scan complete")
-    except Exception as e:
-        error(f"Scan error: {e}")
+    names = [
+        domain.replace('.', '-'),
+        domain.replace('.', ''),
+        f"{domain.replace('.','')}-dev",
+        f"{domain.replace('.','')}-prod",
+        f"{domain.replace('.','')}-staging",
+        f"{domain.replace('.','')}-backup",
+        f"{domain.replace('.','')}-static",
+        'www', 'assets', 'cdn', 'files', 'media', 'img'
+    ]
+    
+    info(f"Testing {len(names)} bucket names...")
+    
+    found = []
+    for name in names[:20]:
+        try:
+            url = f"https://{name}.s3.amazonaws.com"
+            r = requests.head(url, timeout=3)
+            if r.status_code == 200:
+                highlight(f"  {c('G','ACCESSIBLE')} {name}.s3.amazonaws.com")
+                found.append(name)
+            elif r.status_code == 403:
+                result(f"  {c('Y','~')} {name}.s3.amazonaws.com (Forbidden - exists)")
+        except: pass
+    
+    ok(f"Bucket scan complete. {len(found)} accessible buckets.")
 
-def tool_lfi(url):
-    header("LFI SCANNER (Local File Inclusion)")
-    info(f"Target: {url}")
+def mod_wayback():
+    domain = inp("Target domain")
+    if not domain: return
     
-    payloads = ['/etc/passwd', '../etc/passwd', '....//....//etc/passwd',
-                '/etc/hosts', '../etc/hosts', '../../etc/passwd',
-                '/proc/self/environ', '/proc/cmdline']
-    
-    try:
-        parsed = requests.utils.urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        params = dict(urllib.parse.parse_qsl(parsed.query))
-        
-        if not params:
-            info("No query parameters found")
-            return
-        
-        for name, val in params.items():
-            for payload in payloads:
-                test_params = {name: payload}
-                try:
-                    r = requests.get(base_url, params=test_params, timeout=5)
-                    if 'root:x:' in r.text or '/bin/' in r.text:
-                        highlight(f"  [!] LFI FOUND: {name}={payload}")
-                    elif 'localhost' in r.text or 'hostname' in r.text:
-                        highlight(f"  [!] LFI POSSIBLE: {name}={payload}")
-                except:
-                    pass
-        
-        success("LFI scan complete")
-    except Exception as e:
-        error(f"Scan error: {e}")
-
-def tool_ssti(url):
-    header("SSTI SCANNER (Server Side Template Injection)")
-    info(f"Target: {url}")
-    
-    # Simple SSTI test payloads
-    payloads = ['{{7*7}}', '${7*7}', '<%= 7*7 %>', '{{config}}']
-    
-    try:
-        parsed = requests.utils.urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        params = dict(urllib.parse.parse_qsl(parsed.query))
-        
-        if not params:
-            info("No query parameters found")
-            return
-        
-        for name, val in params.items():
-            for payload in payloads:
-                test_params = {name: payload}
-                try:
-                    r = requests.get(base_url, params=test_params, timeout=5)
-                    if '49' in r.text or 'config' in r.text.lower():
-                        highlight(f"  [!] Possible SSTI: {name}={payload}")
-                except:
-                    pass
-        
-        success("SSTI scan complete")
-    except Exception as e:
-        error(f"Scan error: {e}")
-
-def tool_cmd_injection(url):
-    header("COMMAND INJECTION SCANNER")
-    info(f"Target: {url}")
-    
-    payloads = [';whoami', '|whoami', '&&whoami', ';ls', '|ls', ';id', '|id',
-                 ';cat /etc/passwd', '|cat /etc/passwd', '`whoami`', '$(whoami)']
-    
-    try:
-        parsed = requests.utils.urlparse(url)
-        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        params = dict(urllib.parse.parse_qsl(parsed.query))
-        
-        if not params:
-            info("No query parameters found")
-            return
-        
-        for name, val in params.items():
-            for payload in payloads:
-                test_params = {name: payload}
-                try:
-                    r = requests.get(base_url, params=test_params, timeout=5)
-                    resp = r.text.lower()
-                    
-                    # Check for command output
-                    indicators = ['root:', 'uid=', 'bin/', 'total ']
-                    if any(ind in resp for ind in indicators):
-                        highlight(f"  [!] COMMAND INJECTION: {name}={payload}")
-                except:
-                    pass
-        
-        success("Command injection scan complete")
-    except Exception as e:
-        error(f"Scan error: {e}")
-
-def tool_wayback(domain):
-    header("WAYBACK MACHINE / URL DISCOVERY")
+    step("Wayback Machine URL Discovery")
     info(f"Target: {domain}")
     
     try:
@@ -541,12 +1301,10 @@ def tool_wayback(domain):
             try:
                 data = r.json()
                 if len(data) > 1:
-                    results = data[1:]  # Skip header
-                    info(f"Found {len(results)} historical URLs")
-                    
-                    for row in results[:20]:
+                    info(f"Found {len(data)-1} historical URLs")
+                    for row in data[1:]:
                         if row and row[0]:
-                            result(f"  - {row[0][:80]}")
+                            highlight(f"  {c('C','↗')} {row[0][:80]}")
                 else:
                     info("No archived URLs found")
             except:
@@ -556,670 +1314,409 @@ def tool_wayback(domain):
     except Exception as e:
         error(f"Error: {e}")
 
-def tool_js_scan(domain):
-    header("JAVASCRIPT SECURITY SCANNER")
+def mod_js_scan():
+    domain = inp("Target domain")
+    if not domain: return
+    if not domain.startswith('http'):
+        domain = f"http://{domain}"
+    
+    step("JavaScript Security Scanner")
     info(f"Target: {domain}")
     
     try:
-        base = f"https://{domain}" if not '://' in domain else domain
-        r = requests.get(base, timeout=10)
+        r = requests.get(domain, timeout=10, verify=False)
         
-        # Find JS files
         js_files = re.findall(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', r.text)
         info(f"Found {len(js_files)} JS files")
         
-        # Search for secrets in JS
         secret_patterns = {
             'AWS Key': r'AKIA[0-9A-Z]{16}',
             'Google API': r'AIza[0-9A-Za-z\-_]{35}',
             'Slack Token': r'xox[baprs]-[0-9a-zA-Z\-]+',
             'GitHub Token': r'gh[pousr]_[A-Za-z0-9_]{36,255}',
-            'Generic API Key': r'["\'][aA][pP][iI]_?[kK][eE][yY]["\'][^"\']{0,50}["\'][0-9a-zA-Z_\-]{20,}["\']',
+            'Generic Secret': r'["\'][a-zA-Z0-9_-]{20,}["\'][^"\']{0,20}["\'][a-zA-Z0-9_-]{20,}["\']',
             'Bearer Token': r'[Bb]earer\s+[0-9a-zA-Z_\-\.]+',
+            'Basic Auth': r'[Bb]asic\s+[A-Za-z0-9+/=]+',
         }
         
-        for js_url in js_files[:5]:
-            full_url = js_url if js_url.startswith('http') else base.rstrip('/') + '/' + js_url.lstrip('/')
+        for js_url in js_files[:10]:
+            full_url = js_url if js_url.startswith('http') else domain.rstrip('/') + '/' + js_url.lstrip('/')
             try:
-                jr = requests.get(full_url, timeout=5)
+                jr = requests.get(full_url, timeout=5, verify=False)
+                
                 for name, pattern in secret_patterns.items():
-                    if re.search(pattern, jr.text):
-                        highlight(f"  [!] Possible {name} in {js_url[:50]}")
-            except:
-                pass
+                    matches = re.findall(pattern, jr.text)
+                    if matches:
+                        for m in matches[:3]:
+                            highlight(f"  {c('R','[!]')} {name} in {js_url[:50]}")
+                            highlight(f"      Match: {str(m)[:80]}")
+            except: pass
         
-        success("JS scan complete")
+        ok("JS scan complete")
     except Exception as e:
         error(f"Error: {e}")
 
-def tool_cms(domain):
-    header("CMS DETECTION")
+def mod_cms():
+    domain = inp("Target domain")
+    if not domain: return
+    if not domain.startswith('http'):
+        domain = f"http://{domain}"
+    
+    step("CMS & Technology Detection")
     info(f"Target: {domain}")
     
     try:
-        base = f"https://{domain}" if not '://' in domain else domain
-        r = requests.get(base, timeout=10)
+        r = requests.get(domain, timeout=10, verify=False)
         content = r.text.lower()
+        headers = dict(r.headers)
         
-        cms_list = [
-            ('WordPress', ['wp-content', 'wp-includes', 'wordpress', 'wp-json']),
-            ('Joomla', ['joomla', '/media/jui/', 'option=com']),
-            ('Drupal', ['drupal', 'sites/default', 'node/']),
-            ('Laravel', ['laravel_session', 'XSRF-TOKEN', 'laravel']),
-            ('React', ['react', '_next/static', '__NEXT_DATA__']),
-            ('Vue', ['vue', '__nuxt', 'nuxt.config']),
-            ('Next.js', ['_next/static', '__NEXT_DATA__']),
-            ('Django', ['csrftoken', 'django']),
-            ('Magento', ['mage-', 'magento']),
-            ('Shopify', ['shopify', 'cdn.shopify.com']),
-        ]
+        cms_map = {
+            'WordPress': ['wp-content','wp-includes','wordpress','wp-json'],
+            'Joomla': ['joomla', '/media/jui/', 'option=com'],
+            'Drupal': ['drupal', 'sites/default'],
+            'Laravel': ['laravel_session', 'XSRF-TOKEN', 'laravel'],
+            'React': ['react', '__next/static', '__NEXT_DATA__'],
+            'Vue': ['vue', '__nuxt'],
+            'Next.js': ['_next/static', '__NEXT_DATA__'],
+            'Django': ['csrftoken', 'django'],
+            'Angular': ['ng-component', '@angular'],
+            'Flask': ['flask', '__PYTHONSTARTUP__'],
+            'Express': ['express', 'node_modules/express'],
+        }
         
-        found = []
-        for cms_name, signatures in cms_list:
-            if any(sig in content for sig in signatures):
-                found.append(cms_name)
-                highlight(f"  Detected: {cms_name}")
+        found_cms = []
+        for cms, sigs in cms_map.items():
+            if any(s in content for s in sigs):
+                found_cms.append(cms)
+                highlight(f"  {c('G','+')} {cms}")
         
-        if not found:
+        if not found_cms:
             info("No common CMS detected")
         
-        # Check security headers
-        headers = dict(r.headers)
-        sec_headers = ['X-Frame-Options', 'X-Content-Type-Options', 
-                       'Strict-Transport-Security', 'Content-Security-Policy']
-        
-        header("Security Headers")
-        for h in sec_headers:
-            if h.lower() in [x.lower() for x in headers.keys()]:
-                result(f"  ✓ {h}: Present")
+        # Security headers
+        print(f"\n  {c('BOLD','Security Headers:')}")
+        sec = ['X-Frame-Options','X-Content-Type-Options','Strict-Transport-Security',
+               'Content-Security-Policy','X-XSS-Protection','Referrer-Policy']
+        for h in sec:
+            if h in headers:
+                ok(f"  {h}: Present")
             else:
-                warn(f"  ✗ {h}: Missing")
-                
-    except Exception as e:
-        error(f"Error: {e}")
-
-def tool_s3_bucket(domain):
-    header("S3 BUCKET FINDER")
-    info(f"Target: {domain}")
-    
-    names = [
-        domain.replace('.', '-'), domain.replace('.', ''),
-        f"{domain.replace('.','')}-dev", f"{domain.replace('.','')}-prod",
-        f"{domain.replace('.','')}-staging", f"{domain.replace('.','')}-backup",
-        'www', 'assets', 'static', 'cdn', 'files', 'media'
-    ]
-    
-    found_buckets = []
-    for name in names[:15]:
-        try:
-            url = f"https://{name}.s3.amazonaws.com"
-            r = requests.head(url, timeout=3)
-            if r.status_code == 200:
-                highlight(f"  [!] ACCESSIBLE: {name}.s3.amazonaws.com")
-                found_buckets.append(name)
-            elif r.status_code == 403:
-                result(f"  ~ {name}.s3.amazonaws.com (Forbidden)")
-        except:
-            pass
-    
-    success(f"Bucket scan complete. {len(found_buckets)} accessible.")
-
-def tool_ip_lookup(ip):
-    header("IP LOOKUP & GEOLOCATION")
-    info(f"Target: {ip}")
-    
-    try:
-        r = requests.get(f"http://ip-api.com/json/{ip}?fields=status,country,countryCode,region,city,isp,org,as,lat,lon,timezone", timeout=10)
-        data = r.json()
+                no(f"  {h}: MISSING")
         
-        if data.get('status') == 'success':
-            result(f"  IP:       {data.get('query')}")
-            result(f"  Country:  {data.get('country')} ({data.get('countryCode')})")
-            result(f"  Region:   {data.get('regionName')}")
-            result(f"  City:     {data.get('city')}")
-            result(f"  ISP:      {data.get('isp')}")
-            result(f"  Org:      {data.get('org')}")
-            result(f"  AS:       {data.get('as')}")
-            result(f"  Coords:   {data.get('lat')}, {data.get('lon')}")
-            result(f"  Timezone: {data.get('timezone')}")
-            success("IP lookup complete")
-        else:
-            error("IP lookup failed")
+        # Server
+        if 'Server' in headers:
+            result(f"  Server: {headers['Server']}")
+        
+        ok("CMS detection complete")
     except Exception as e:
         error(f"Error: {e}")
 
-def tool_reverse_dns(ip):
-    header("REVERSE DNS LOOKUP")
-    info(f"Target: {ip}")
+def mod_amass():
+    domain = inp("Target domain")
+    if not domain: return
     
-    try:
-        host = socket.gethostbyaddr(ip)
-        highlight(f"  Hostname: {host[0]}")
-        for alias in host[1]:
-            result(f"  Alias: {alias}")
-        success("Reverse DNS complete")
-    except Exception as e:
-        error(f"No reverse DNS: {e}")
-
-def tool_crawl(domain, max_pages=20):
-    header("WEB CRAWLER")
-    info(f"Target: {domain} (max {max_pages} pages)")
-    
-    base = f"https://{domain}" if not '://' in domain else domain
-    visited = set()
-    queue = [base]
-    emails = set()
-    forms = []
-    links = []
-    
-    try:
-        import re
-        while queue and len(visited) < max_pages:
-            url = queue.pop(0)
-            if url in visited:
-                continue
-            visited.add(url)
-            
-            try:
-                r = requests.get(url, timeout=5)
-                
-                # Extract emails
-                for email in re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', r.text):
-                    emails.add(email)
-                
-                # Extract forms
-                for form in re.findall(r'<form[^>]*>(.*?)</form>', r.text, re.DOTALL | re.IGNORECASE):
-                    forms.append(url)
-                
-                # Extract links
-                for link in re.findall(r'href=["\']([^"\']+)["\']', r.text):
-                    if domain in link or link.startswith('/'):
-                        full = link if link.startswith('http') else base.rstrip('/') + '/' + link.lstrip('/')
-                        if full not in visited:
-                            queue.append(full)
-                            links.append(full)
-                
-                result(f"  Crawled: {url}")
-            except:
-                pass
-                
-        header("CRAWL SUMMARY")
-        highlight(f"  Pages:    {len(visited)}")
-        result(f"  Links:    {len(set(links))}")
-        result(f"  Forms:    {len(forms)}")
-        result(f"  Emails:   {len(emails)}")
-        if emails:
-            for email in list(emails)[:5]:
-                highlight(f"    - {email}")
-                
-    except Exception as e:
-        error(f"Error: {e}")
-
-def tool_dirbust(domain):
-    header("DIRECTORY BUSTING")
+    step("Amass Subdomain Enumeration")
     info(f"Target: {domain}")
     
-    base = f"https://{domain}" if not '://' in domain else domain
-    dirs = ['admin', 'login', 'dashboard', 'api', 'backup', 'admin panel',
-            'config', 'wp-admin', 'administrator', 'phpmyadmin', 'server-status',
-            '.env', '.git', '.htaccess', 'sitemap.xml', 'robots.txt', 'crossdomain.xml',
-            'well-known/security.txt', 'api/v1', 'api/v2', 'graphql', 'console',
-            'status', 'health', 'actuator', 'env', 'configuration']
+    if not check_tool('amass', 'amass enum -version'):
+        error("Amass not installed. Install: https://github.com/owasp-amass/amass")
+        return
+    
+    info("Running amass (passive mode)...")
+    info("This may take a few minutes...")
+    
+    out_file = OUTPUT_DIR / f"amass_{domain}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    
+    try:
+        cmd = f"amass enum -passive -d {domain} -o {out_file}"
+        proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        
+        found = []
+        for line in iter(proc.stdout.readline, b''):
+            l = line.decode().strip()
+            if l and '.' in l:
+                found.append(l)
+                highlight(f"  + {l}")
+        
+        proc.wait()
+        ok(f"Amass found {len(found)} subdomains")
+        if out_file.exists():
+            ok(f"Results saved: {out_file}")
+    except Exception as e:
+        error(f"Amass error: {e}")
+
+def mod_dirbust():
+    domain = inp("Target domain")
+    if not domain: return
+    if not domain.startswith('http'):
+        domain = f"http://{domain}"
+    
+    step("Directory Busting")
+    info(f"Target: {domain}")
+    
+    dirs = ['admin','login','dashboard','api','backup','wp-admin','admin.php',
+            'administrator','phpmyadmin','server-status','.env','.git',
+            '.htaccess','robots.txt','sitemap.xml','actuator','env',
+            'config','api/v1','console','status','health','swagger',
+            'api-docs','v1/api','v2/api','graphql','debug','trace',
+            'env.bak','config.bak','database.sql','backup.sql',
+            '.well-known/security.txt','CFIDE','jmx-console','web-console']
+    
+    info(f"Testing {len(dirs)} common paths...")
     
     found = []
     for d in dirs:
         try:
-            url = f"{base.rstrip('/')}/{d}"
-            r = requests.get(url, timeout=3, allow_redirects=False)
+            r = requests.head(f"{domain.rstrip('/')}/{d}", timeout=3, allow_redirects=False)
             if r.status_code == 200:
-                highlight(f"  [!] FOUND: /{d} (200 OK)")
+                highlight(f"  {c('G','+')} /{d} (200 OK)")
                 found.append(f"/{d}")
-            elif r.status_code in (301, 302, 307, 308):
-                result(f"  ~ /{d} -> {r.status_code} (redirect)")
-        except:
-            pass
+            elif r.status_code in (301,302,307,308):
+                loc = r.headers.get('Location','')
+                result(f"  {c('Y','~')} /{d} -> {r.status_code} ({loc[:40]})")
+        except: pass
     
-    success(f"Directory busting complete. Found {len(found)} accessible paths.")
+    ok(f"Directory busting complete. Found {len(found)} accessible paths.")
 
-def tool_nmap(domain):
-    header("NMAP PORT SCAN")
-    info(f"Target: {domain}")
-    
-    try:
-        ip = socket.gethostbyname(domain)
-        info(f"Resolved {domain} -> {ip}")
-        
-        # Common port scan via socket
-        ports = {
-            21: 'FTP', 22: 'SSH', 23: 'Telnet', 25: 'SMTP', 53: 'DNS',
-            80: 'HTTP', 110: 'POP3', 143: 'IMAP', 443: 'HTTPS',
-            445: 'SMB', 465: 'SMTPS', 587: 'SMTP-TLS', 993: 'IMAPS',
-            995: 'POP3S', 1433: 'MSSQL', 1521: 'Oracle', 3306: 'MySQL',
-            3389: 'RDP', 5432: 'PostgreSQL', 5900: 'VNC', 6379: 'Redis',
-            8080: 'HTTP-Alt', 8443: 'HTTPS-Alt', 9200: 'Elasticsearch',
-            27017: 'MongoDB'
-        }
-        
-        open_ports = []
-        for port, svc in ports.items():
-            try:
-                sock = socket.socket()
-                sock.settimeout(1)
-                if sock.connect_ex((ip, port)) == 0:
-                    open_ports.append((port, svc))
-                    highlight(f"  {C['G']}OPEN{C['RESET']} {port}/tcp - {svc}")
-                sock.close()
-            except:
-                pass
-        
-        success(f"Found {len(open_ports)} open ports")
-        
-    except Exception as e:
-        error(f"Nmap error: {e}")
-        info("Install nmap CLI for full port range: sudo apt install nmap")
+# ─── Utilities ─────────────────────────────────────────────────────────────
 
-def tool_full_recon(domain):
-    header(f"FULL RECON: {domain}")
-    info("Running all reconnaissance modules...")
+def util_hash():
+    step("Hash Generator")
+    text = inp("Text to hash")
+    if not text: return
     
-    modules = [
-        ("Subdomain Enum", lambda: tool_subdomain(domain)),
-        ("DNS Records", lambda: tool_dns(domain)),
-        ("Port Scan", lambda: tool_port_scan(domain)),
-        ("CORS Check", lambda: tool_cors(domain)),
-        ("CMS Detection", lambda: tool_cms(domain)),
-        ("Directory Busting", lambda: tool_dirbust(domain)),
-        ("Wayback URLs", lambda: tool_wayback(domain)),
-        ("S3 Bucket Check", lambda: tool_s3_bucket(domain)),
-    ]
-    
-    for name, func in modules:
-        try:
-            func()
-        except Exception as e:
-            error(f"{name} failed: {e}")
-    
-    success("Full recon complete!")
-
-# ─── Utils ────────────────────────────────────────────────────────────────
+    print(f"\n  {c('BOLD','Hash Results:')}")
+    print(f"  MD5:    {hashlib.md5(text.encode()).hexdigest()}")
+    print(f"  SHA1:   {hashlib.sha1(text.encode()).hexdigest()}")
+    print(f"  SHA256: {hashlib.sha256(text.encode()).hexdigest()}")
+    print(f"  SHA512: {hashlib.sha512(text.encode()).hexdigest()}")
 
 def util_base64():
-    header("BASE64 ENCODE/DECODE")
-    print("  1. Encode")
-    print("  2. Decode")
-    opt = input_int("Option", 1, 2)
-    text = input_str("Text")
+    step("Base64 Encode/Decode")
+    print(f"  {c('W','1.')} Encode")
+    print(f"  {c('W','2.')} Decode")
+    opt = inp_int("Option", 1, 2)
+    text = inp("Text")
+    if not text: return
     
     if opt == 1:
-        encoded = base64.b64encode(text.encode()).decode()
-        highlight(f"Encoded: {encoded}")
+        highlight(f"Encoded: {base64.b64encode(text.encode()).decode()}")
     else:
         try:
-            decoded = base64.b64decode(text.encode()).decode()
-            highlight(f"Decoded: {decoded}")
+            highlight(f"Decoded: {base64.b64decode(text.encode()).decode()}")
         except:
             error("Invalid base64")
 
 def util_url():
-    header("URL ENCODE/DECODE")
-    print("  1. Encode")
-    print("  2. Decode")
-    opt = input_int("Option", 1, 2)
-    text = input_str("Text")
+    step("URL Encode/Decode")
+    print(f"  {c('W','1.')} Encode")
+    print(f"  {c('W','2.')} Decode")
+    opt = inp_int("Option", 1, 2)
+    text = inp("Text")
+    if not text: return
     
     if opt == 1:
-        encoded = urllib.parse.quote(text)
-        highlight(f"Encoded: {encoded}")
+        highlight(f"Encoded: {urllib.parse.quote(text)}")
     else:
         try:
-            decoded = urllib.parse.unquote(text)
-            highlight(f"Decoded: {decoded}")
+            highlight(f"Decoded: {urllib.parse.unquote(text)}")
         except:
             error("Invalid URL encoding")
 
-def util_hash():
-    header("HASH GENERATOR")
-    text = input_str("Text")
-    
-    results = [
-        ("MD5", hashlib.md5(text.encode()).hexdigest()),
-        ("SHA1", hashlib.sha1(text.encode()).hexdigest()),
-        ("SHA256", hashlib.sha256(text.encode()).hexdigest()),
-    ]
-    
-    for name, h in results:
-        result(f"{name}: {h}")
+# ─── Main Menu ─────────────────────────────────────────────────────────────
 
-# ─── Main Menu ───────────────────────────────────────────────────────────
-
-def menu_main():
+def main_menu():
     clear()
     banner()
-    print(f"""
-  {C['BOLD']}{C['W']}┌─────────────────────────────────────────────────────────┐{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}1.{C['RESET']} Recon & Enum      — Subdomain, DNS, Port, CORS     {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}2.{C['RESET']} Vuln Scanner     — SQLi, XSS, SSRF, LFI, SSTI     {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}3.{C['RESET']} CVE Search      — Search by keyword, year, ID     {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}4.{C['RESET']} Lookup Tools    — WHOIS, IP, Reverse DNS         {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}5.{C['RESET']} Web Scanner     — Crawl, JS, CMS, Dirbust, S3     {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}6.{C['RESET']} Utils           — Base64, URL, Hash encode        {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}7.{C['RESET']} Full Recon      — Run ALL modules on target       {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['Y']}0.{C['RESET']} Exit            — Quit                           {C['W']}│{C['RESET']}
-  {C['BOLD']}{C['W']}└─────────────────────────────────────────────────────────┘{C['RESET']}
-""")
+    print("""
+    \033[1m┌────────────────────────────────────────────────────────────────┐\033[0m
+    │  \033[92m1.\033[0m AUTO RECON     - Full automation, just input URL           \033[1m│\033[0m
+    │  \033[92m2.\033[0m Subdomain     - Amass + Subfinder + Wordlist           \033[1m│\033[0m
+    │  \033[92m3.\033[0m Nuclei Scan   - Template-based vulnerability scanner    \033[1m│\033[0m
+    │  \033[92m4.\033[0m SQLMap        - SQL Injection scanner                   \033[1m│\033[0m
+    │  \033[92m5.\033[0m FFUF          - Directory/content fuzzing                \033[1m│\033[0m
+    │  \033[92m6.\033[0m CVE Search    - NVD database (keyword, year, ID)       \033[1m│\033[0m
+    │  \033[92m7.\033[0m Vuln Scan     - XSS, SQLi, SSRF, LFI, Cmd Inj, SSTI    \033[1m│\033[0m
+    │  \033[92m8.\033[0m Lookup        - WHOIS, IP, Reverse DNS, CMS            \033[1m│\033[0m
+    │  \033[92m9.\033[0m Web Scan      - Crawl, JS, S3, Wayback, Dirbust       \033[1m│\033[0m
+    │  \033[92m10\033[0m Utils        - Hash, Base64, URL encode/decode        \033[1m│\033[0m
+    │  \033[93m0.\033[0m Exit          - Quit                                    \033[1m│\033[0m
+    \033[1m└────────────────────────────────────────────────────────────────┘\033[0m
+    """)
 
-def menu_recon():
+def vuln_menu():
     clear()
-    header("RECON & ENUMERATION")
-    print(f"""  {C['W']}┌─────────────────────────────────────────────────────────┐{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}1.{C['RESET']} Subdomain Enumeration                          {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}2.{C['RESET']} DNS Records (A, NS, MX, TXT)                  {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}3.{C['RESET']} Port Scan (common ports)                      {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}4.{C['RESET']} CORS Misconfiguration Check                    {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}5.{C['RESET']} SSL Certificate Info                          {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}6.{C['RESET']} WHOIS Lookup                                  {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}0.{C['RESET']} Back to Main Menu                              {C['W']}│{C['RESET']}
-  {C['W']}└─────────────────────────────────────────────────────────┘{C['RESET']}
+    step("VULNERABILITY SCANNERS")
+    print("""  \033[97m\033[1m┌───────────────────────────────────────────────────────┐\033[0m\033[97m
+  \033[97m│\033[0m  \033[92m1.\033[0m XSS Scanner          \033[90m—\033[0m Cross-Site Scripting          \033[97m│\033[0m
+  \033[97m│\033[0m  \033[92m2.\033[0m SQL Injection        \033[90m—\033[0m SQLi detection                 \033[97m│\033[0m
+  \033[97m│\033[0m  \033[92m3.\033[0m SSRF Scanner         \033[90m—\033[0m Server-Side Request Forgery   \033[97m│\033[0m
+  \033[97m│\033[0m  \033[92m4.\033[0m LFI Scanner          \033[90m—\033[0m Local File Inclusion          \033[97m│\033[0m
+  \033[97m│\033[0m  \033[92m5.\033[0m Command Injection    \033[90m—\033[0m OS command execution          \033[97m│\033[0m
+  \033[97m│\033[0m  \033[92m6.\033[0m Open Redirect        \033[90m—\033[0m URL redirection vulnerability \033[97m│\033[0m
+  \033[97m│\033[0m  \033[92m7.\033[0m SSTI Scanner         \033[90m—\033[0m Template injection             \033[97m│\033[0m
+  \033[97m│\033[0m  \033[92m8.\033[0m CORS Misconfig       \033[90m—\033[0m CORS vulnerability check      \033[97m│\033[0m
+  \033[97m│\033[0m  \033[93m0.\033[0m Back to Main Menu                                \033[97m│\033[0m
+  \033[97m\033[1m└───────────────────────────────────────────────────────┘\033[0m
 """)
 
-def menu_vuln():
+def lookup_menu():
     clear()
-    header("VULNERABILITY SCANNERS")
-    print(f"""  {C['W']}┌─────────────────────────────────────────────────────────┐{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}1.{C['RESET']} SQL Injection (SQLi)                            {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}2.{C['RESET']} Cross-Site Scripting (XSS)                     {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}3.{C['RESET']} Server-Side Request Forgery (SSRF)              {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}4.{C['RESET']} Local File Inclusion (LFI)                      {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}5.{C['RESET']} Open Redirect                                   {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}6.{C['RESET']} Server-Side Template Injection (SSTI)          {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}7.{C['RESET']} Command Injection                             {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}0.{C['RESET']} Back to Main Menu                              {C['W']}│{C['RESET']}
-  {C['W']}└─────────────────────────────────────────────────────────┘{C['RESET']}
+    step("LOOKUP TOOLS")
+    print(""""
+    [1] WHOIS Lookup         - Domain registration info
+    [2] IP Geolocation       - IP location lookup
+    [3] Reverse DNS        - IP to hostname
+    [4] Port Scan           - Common port scanner
+    [5] CMS Detection      - WordPress, Laravel, etc.
+    [0] Back to Main Menu
 """)
-
-def menu_lookup():
+def web_menu():
     clear()
-    header("LOOKUP TOOLS")
-    print(f"""  {C['W']}┌─────────────────────────────────────────────────────────┐{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}1.{C['RESET']} WHOIS Lookup                                   {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}2.{C['RESET']} IP Geolocation                                 {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}3.{C['RESET']} Reverse DNS Lookup                              {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}4.{C['RESET']} CMS Detection                                   {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}0.{C['RESET']} Back to Main Menu                              {C['W']}│{C['RESET']}
-  {C['W']}└─────────────────────────────────────────────────────────┘{C['RESET']}
+    step("WEB SCANNER")
+    print("""
+  [1] Directory Busting    - Common path discovery
+  [2] S3 Bucket Finder    - AWS bucket enumeration
+  [3] Wayback URLs        - Historical URL discovery
+  [4] JS Security Scan    - Secrets in JS files
+  [5] Subdomain Enum      - All subdomain methods
+  [0] Back to Main Menu
 """)
 
-def menu_web():
+def utils_menu():
     clear()
-    header("WEB SCANNER")
-    print(f"""  {C['W']}┌─────────────────────────────────────────────────────────┐{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}1.{C['RESET']} Web Crawler (links, forms, emails)             {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}2.{C['RESET']} JS Scanner (find secrets in JS files)         {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}3.{C['RESET']} Directory Busting                              {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}4.{C['RESET']} S3 Bucket Finder                               {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}5.{C['RESET']} Wayback Machine (historical URLs)              {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}6.{C['RESET']} NMAP Port Scan                                {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}0.{C['RESET']} Back to Main Menu                              {C['W']}│{C['RESET']}
-  {C['W']}└─────────────────────────────────────────────────────────┘{C['RESET']}
+    step("ENCODING & HASHING UTILS")
+    print("""
+  [1] Hash Generator       - MD5, SHA1, SHA256, SHA512
+  [2] Base64 Encode/Decode - Base64 tool
+  [3] URL Encode/Decode   - URL encoding tool
+  [0] Back to Main Menu
 """)
-
-def menu_utils():
-    clear()
-    header("ENCODING & HASHING UTILS")
-    print(f"""  {C['W']}┌─────────────────────────────────────────────────────────┐{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}1.{C['RESET']} Base64 Encode / Decode                        {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}2.{C['RESET']} URL Encode / Decode                            {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}3.{C['RESET']} Hash Generator (MD5, SHA1, SHA256)            {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}0.{C['RESET']} Back to Main Menu                              {C['W']}│{C['RESET']}
-  {C['W']}└─────────────────────────────────────────────────────────┘{C['RESET']}
-""")
-
-def menu_cve():
-    clear()
-    header("CVE SEARCH (NVD)")
-    print(f"""  {C['W']}┌─────────────────────────────────────────────────────────┐{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}1.{C['RESET']} Search by Keyword                             {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}2.{C['RESET']} Search by Year                                {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}3.{C['RESET']} Search by Keyword + Year                      {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}4.{C['RESET']} Lookup Specific CVE ID                       {C['W']}│{C['RESET']}
-  {C['W']}│{C['RESET']}  {C['G']}0.{C['RESET']} Back to Main Menu                              {C['W']}│{C['RESET']}
-  {C['W']}└─────────────────────────────────────────────────────────┘{C['RESET']}
-""")
-
-# ─── Handler ─────────────────────────────────────────────────────────────
-
-def handle_recon():
-    while True:
-        menu_recon()
-        opt = input_int("Select", 0, 6)
-        
-        if opt == 0:
-            break
-        elif opt == 1:
-            domain = input_str("Domain (example.com)")
-            tool_subdomain(domain)
-        elif opt == 2:
-            domain = input_str("Domain (example.com)")
-            tool_dns(domain)
-        elif opt == 3:
-            domain = input_str("Domain (example.com)")
-            tool_port_scan(domain)
-        elif opt == 4:
-            domain = input_str("Domain (example.com)")
-            tool_cors(domain)
-        elif opt == 5:
-            domain = input_str("Domain (example.com)")
-            tool_ssl(domain)
-        elif opt == 6:
-            domain = input_str("Domain (example.com)")
-            tool_whois(domain)
-        
-        if opt != 0:
-            pause()
-
-def handle_vuln():
-    while True:
-        menu_vuln()
-        opt = input_int("Select", 0, 7)
-        
-        if opt == 0:
-            break
-        elif opt in (1, 2, 3, 4, 5, 6, 7):
-            url = input_str("Full URL (?param=value)")
-            if opt == 1:
-                tool_sqli(url)
-            elif opt == 2:
-                tool_xss(url)
-            elif opt == 3:
-                tool_ssrf(url)
-            elif opt == 4:
-                tool_lfi(url)
-            elif opt == 5:
-                tool_open_redirect(url)
-            elif opt == 6:
-                tool_ssti(url)
-            elif opt == 7:
-                tool_cmd_injection(url)
-        
-        if opt != 0:
-            pause()
-
-def handle_lookup():
-    while True:
-        menu_lookup()
-        opt = input_int("Select", 0, 4)
-        
-        if opt == 0:
-            break
-        elif opt == 1:
-            domain = input_str("Domain (example.com)")
-            tool_whois(domain)
-        elif opt == 2:
-            ip = input_str("IP Address")
-            tool_ip_lookup(ip)
-        elif opt == 3:
-            ip = input_str("IP Address")
-            tool_reverse_dns(ip)
-        elif opt == 4:
-            domain = input_str("Domain (example.com)")
-            tool_cms(domain)
-        
-        if opt != 0:
-            pause()
-
-def handle_web():
-    while True:
-        menu_web()
-        opt = input_int("Select", 0, 6)
-        
-        if opt == 0:
-            break
-        elif opt == 1:
-            domain = input_str("Domain (example.com)")
-            tool_crawl(domain)
-        elif opt == 2:
-            domain = input_str("Domain (example.com)")
-            tool_js_scan(domain)
-        elif opt == 3:
-            domain = input_str("Domain (example.com)")
-            tool_dirbust(domain)
-        elif opt == 4:
-            domain = input_str("Domain (example.com)")
-            tool_s3_bucket(domain)
-        elif opt == 5:
-            domain = input_str("Domain (example.com)")
-            tool_wayback(domain)
-        elif opt == 6:
-            domain = input_str("Domain (example.com)")
-            tool_nmap(domain)
-        
-        if opt != 0:
-            pause()
-
-def handle_utils():
-    while True:
-        menu_utils()
-        opt = input_int("Select", 0, 3)
-        
-        if opt == 0:
-            break
-        elif opt == 1:
-            util_base64()
-        elif opt == 2:
-            util_url()
-        elif opt == 3:
-            util_hash()
-        
-        if opt != 0:
-            pause()
-
-def handle_cve():
-    while True:
-        menu_cve()
-        opt = input_int("Select", 0, 4)
-        
-        if opt == 0:
-            break
-        elif opt == 1:
-            keyword = input_str("Keyword (e.g. xss, sql injection)")
-            tool_cve(keyword=keyword)
-        elif opt == 2:
-            year = input_str("Year (e.g. 2024)")
-            try:
-                tool_cve(year=int(year))
-            except:
-                error("Invalid year")
-        elif opt == 3:
-            keyword = input_str("Keyword")
-            year = input_str("Year (e.g. 2024)")
-            try:
-                tool_cve(keyword=keyword, year=int(year))
-            except:
-                error("Invalid year")
-        elif opt == 4:
-            cve_id = input_str("CVE ID (e.g. CVE-2024-1234)")
-            tool_cve(cve_id=cve_id)
-        
-        if opt != 0:
-            pause()
 
 def main():
-    # Check dependencies
+    # Check deps
     try:
-        import requests
-        import whois
+        import requests, whois
     except ImportError as e:
-        print(f"{C['R']}[!] Missing dependency: {e}{C['RESET']}")
-        print(f"{C['Y']}[*] Install: pip install requests python-whois{C['RESET']}")
+        print(f"{c('R',f'[!] Missing: {e}')}")
+        print(f"{c('Y','[*] Install: pip install requests python-whois')}")
         sys.exit(1)
     
-    # Auto mode: if args provided, run directly
+    # Auto mode from args
     if len(sys.argv) > 1:
-        handle_auto_mode()
+        domain = None
+        args = sys.argv[1:]
+        
+        # Parse -t flag
+        if '-t' in args:
+            idx = args.index('-t')
+            domain = args[idx+1] if idx+1 < len(args) else None
+        
+        # Single arg (domain)
+        if not domain and args and not args[0].startswith('-'):
+            domain = args[0]
+        
+        if domain:
+            auto_recon(domain)
+            return
+        
+        # CLI flags
+        if '--check' in args:
+            check_tools()
+            return
+        
+        print(f"{c('Y','Usage:')}")
+        print(f"  Interactive: python3 engine.py")
+        print(f"  Auto recon:  python3 engine.py -t example.com")
+        print(f"  Check tools: python3 engine.py --check")
         return
     
     # Interactive mode
     while True:
-        menu_main()
-        opt = input_int("Select", 0, 7)
+        main_menu()
+        opt = inp_int("Select", 0, 10)
         
         if opt == 0:
             clear()
-            print(f"\n  {C['C']}Goodbye! Stay safe.{C['RESET']}\n")
+            print(f"\n  {c('C','Goodbye! Stay safe. 🛡️')}\n")
             break
+        
         elif opt == 1:
-            handle_recon()
+            clear()
+            banner()
+            domain = inp("Target URL (e.g. example.com or https://example.com)")
+            if domain:
+                auto_recon(domain)
+                pause()
+        
         elif opt == 2:
-            handle_vuln()
-        elif opt == 3:
-            handle_cve()
-        elif opt == 4:
-            handle_lookup()
-        elif opt == 5:
-            handle_web()
-        elif opt == 6:
-            handle_utils()
-        elif opt == 7:
-            domain = input_str("Full Target Domain")
-            tool_full_recon(domain)
+            mod_amass() if check_tool('amass', 'amass enum -version') else mod_subdomains()
             pause()
-
-def handle_auto_mode():
-    """Run from command line args (legacy compatibility)"""
-    args = sys.argv[1:]
-    if '-t' in args or '--target' in args:
-        idx = args.index('-t') if '-t' in args else args.index('--target')
-        domain = args[idx + 1]
-    else:
-        domain = None
-    
-    if '--recon' in args or '--deep' in args:
-        if domain:
-            tool_full_recon(domain) if '--deep' in args else tool_subdomain(domain)
-    elif '--cve' in args:
-        kw = None; yr = None; cid = None
-        if '--keyword' in args:
-            idx = args.index('--keyword')
-            kw = args[idx + 1]
-        if '--year' in args:
-            idx = args.index('--year')
-            yr = int(args[idx + 1])
-        if '--cve-id' in args:
-            idx = args.index('--cve-id')
-            cid = args[idx + 1]
-        tool_cve(keyword=kw, year=yr, cve_id=cid)
-    elif '--whois' in args and domain:
-        tool_whois(domain)
-    elif '--sqli' in args and len(args) > 1:
-        tool_sqli(args[-1])
-    elif '--xss' in args and len(args) > 1:
-        tool_xss(args[-1])
-    elif '--lfi' in args and len(args) > 1:
-        tool_lfi(args[-1])
-    elif domain:
-        tool_full_recon(domain)
-    else:
-        print(f"{C['Y']}[*] Interactive mode: python3 engine.py{C['RESET']}")
+        
+        elif opt == 3:
+            mod_nuclei()
+            pause()
+        
+        elif opt == 4:
+            mod_sqlmap()
+            pause()
+        
+        elif opt == 5:
+            mod_ffuf()
+            pause()
+        
+        elif opt == 6:
+            mod_cve()
+            pause()
+        
+        elif opt == 7:
+            while True:
+                vuln_menu()
+                v_opt = inp_int("Select", 0, 8)
+                if v_opt == 0: break
+                if v_opt == 1: mod_xss()
+                elif v_opt == 2: mod_sqli()
+                elif v_opt == 3: mod_ssrf()
+                elif v_opt == 4: mod_lfi()
+                elif v_opt == 5: mod_cmd_injection()
+                elif v_opt == 6: mod_open_redirect()
+                elif v_opt == 7: mod_ssti()
+                elif v_opt == 8: mod_cors()
+                pause()
+        
+        elif opt == 8:
+            while True:
+                lookup_menu()
+                l_opt = inp_int("Select", 0, 5)
+                if l_opt == 0: break
+                if l_opt == 1: mod_whois()
+                elif l_opt == 2: mod_ip_lookup()
+                elif l_opt == 3: mod_reverse_dns()
+                elif l_opt == 4: mod_port_scan()
+                elif l_opt == 5: mod_cms()
+                pause()
+        
+        elif opt == 9:
+            while True:
+                web_menu()
+                w_opt = inp_int("Select", 0, 5)
+                if w_opt == 0: break
+                if w_opt == 1: mod_dirbust()
+                elif w_opt == 2: mod_s3_bucket()
+                elif w_opt == 3: mod_wayback()
+                elif w_opt == 4: mod_js_scan()
+                elif w_opt == 5: mod_amass() if check_tool('amass', 'amass enum -version') else mod_subdomains()
+                pause()
+        
+        elif opt == 10:
+            while True:
+                utils_menu()
+                u_opt = inp_int("Select", 0, 3)
+                if u_opt == 0: break
+                if u_opt == 1: util_hash()
+                elif u_opt == 2: util_base64()
+                elif u_opt == 3: util_url()
+                pause()
 
 if __name__ == '__main__':
     main()
