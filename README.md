@@ -1,127 +1,182 @@
-# All-in-One Security Toolkit
+# All-in-One Security Toolkit v3.0
 
-> **Recon • Scanner • CVE • Lookup** — A comprehensive security reconnaissance and vulnerability scanning toolkit with Next.js dashboard UI.
+> **Recon • Scanner • CVE • Lookup** — Advanced security reconnaissance framework with AUTO RECON — just input URL, everything runs automatically.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
-![Python](https://img.shields.io/badge/python-3.9+-green)
-![Next.js](https://img.shields.io/badge/next.js-14-black)
+![Version](https://img.shields.io/badge/version-3.0-blue) ![Python](https://img.shields.io/badge/Python-3.8+-green) ![License](https://img.shields.io/badge/License-MIT-red)
 
 ---
 
-## 🎯 Features
+## ⚡ AUTO RECON (Just Input URL!)
 
-### Recon Modules
-| Module | Description |
-|--------|-------------|
-| Subdomain Enum | DNS enumeration with wordlist |
-| DNS Records | A, AAAA, MX, TXT, NS, CNAME, SOA |
-| Port Scan | Common ports + extended range |
-| HTTP Probe | Endpoint discovery + tech detection |
-| CORS Check | CORS misconfiguration scanner |
-| SSL Info | Certificate analysis |
-| WHOIS Lookup | Domain registration info |
-| Security Headers | X-Frame-Options, CSP, HSTS, etc. |
-| CMS Detector | WordPress, Laravel, React, Django, etc. |
-| Directory Busting | Common path discovery |
-| Web Crawler | Extract links, forms, emails, social media |
-| Wayback Machine | Historical URL discovery |
-| Favicon Hash | MMH3 hash for Shodan integration |
+```
+$ python3 backend/core/engine.py
+→ Select: 1 (AUTO RECON)
+→ Input URL: target.com
+→ DONE! Everything runs automatically
+```
 
-### CVE Search
-- Search by **Year** (e.g., 2024 CVEs)
-- Search by **Keyword** (e.g., "xss", "sql injection")
-- Search by **CVE ID** (e.g., CVE-2024-1234)
-- Real-time data from **NVD (National Vulnerability Database)**
-
-### Vulnerability Scanners
-| Scanner | Description |
-|---------|-------------|
-| XSS | Cross-Site Scripting detection |
-| SQLi | SQL Injection detection |
-| SSRF | Server-Side Request Forgery |
-| Open Redirect | Redirect vulnerability |
-| Nuclei Scan | Template-based vulnerability scanner |
-| Subdomain Takeover | AWS S3, GitHub Pages, Heroku, Netlify, etc. |
-
-### Advanced Recon
-| Module | Description |
-|--------|-------------|
-| S3 Bucket Finder | AWS S3 bucket enumeration |
-| GitHub Recon | GitHub dorking, repo discovery |
-| JS Scanner | Extract secrets & endpoints from JS files |
-| SSL Deep Scan | Full TLS analysis, cipher suites, vulnerabilities |
-| IP Lookup | Geolocation, reverse DNS, AS lookup |
-
-### Leak / Breach Check
-- **HaveIBeenPwned** password check
-- Email breach lookup (requires API key)
-- Domain breach enumeration
-
-### Lookup Tools
-- **WHOIS** — Domain registration lookup
-- **IP Lookup** — Geolocation + ISP info
-- **Reverse DNS** — Hostname from IP
-- **CDN Detection** — Cloudflare, AWS, Azure, etc.
-
-### Utilities
-- Base64 Encode/Decode
-- URL Encode/Decode
-- MD5, SHA1, SHA256 Hashing
-- Hex Encode/Decode
+**Auto Recon executes in sequence:**
+1. Subdomain enumeration (Amass + Subfinder + wordlist)
+2. Port scanning (Top 1000 ports via nmap)
+3. Screenshot all discovered subdomains
+4. Nuclei vulnerability scan on all targets
+5. SQLMap scan on all in-scope targets
+6. FFUF directory fuzzing
+7. Wayback Machine URL extraction
+8. CMS detection + technology fingerprinting
+9. Full vulnerability scan (XSS, SQLi, SSRF, LFI, SSTI)
+10. SSL/TLS analysis
+11. CORS misconfiguration check
+12. JS endpoint extraction
+13. CVE correlation based on detected technologies
 
 ---
 
-## 🚀 Quick Start
+## 🎯 Main Menu
 
-### CLI Usage
+```
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║   v3.0 - PUKI AI AGENT - AUTO RECON + NUCLEI + SQLMAP + FFUF + AMASS        ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+  ┌────────────────────────────────────────────────────────────────┐
+  │  1. AUTO RECON     - Full automation, just input URL           │
+  │  2. Subdomain     - Amass + Subfinder + Wordlist           │
+  │  3. Nuclei Scan   - Template-based vulnerability scanner    │
+  │  4. SQLMap        - SQL Injection scanner                   │
+  │  5. FFUF          - Directory/content fuzzing                │
+  │  6. CVE Search    - NVD database (keyword, year, ID)       │
+  │  7. Vuln Scan     - XSS, SQLi, SSRF, LFI, Cmd Inj, SSTI    │
+  │  8. Lookup        - WHOIS, IP, Reverse DNS, CMS            │
+  │  9. Web Scan      - Crawl, JS, S3, Wayback, Dirbust       │
+  │ 10. Utils        - Hash, Base64, URL encode/decode        │
+  │  0. Exit          - Quit                                    │
+  └────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔧 Installation
 
 ```bash
 # Clone the repo
 git clone git@github.com:B4ckR3d/All-in-One.git
 cd All-in-One
 
-# Install Python dependencies
-pip install -r backend/requirements.txt
+# Backend dependencies
+pip install requests colorama python-whois dnspython mmh3
 
-# Run recon on target
-python3 backend/core/engine.py -t example.com --recon
-
-# Deep recon
-python3 backend/core/engine.py -t example.com --deep
-
-# CVE search
-python3 backend/core/engine.py --cve --year 2024 --keyword xss
-
-# WHOIS lookup
-python3 backend/core/engine.py --whois -t example.com
-
-# Specific modules
-python3 backend/core/engine.py -t example.com --subdomains --cors --dns
-python3 backend/core/engine.py -t example.com --cms --js-scan
-python3 backend/core/engine.py -t example.com --wayback
-python3 backend/core/engine.py -t example.com --s3-bucket
-python3 backend/core/engine.py -t example.com --ssl-deep
-python3 backend/core/engine.py --leak-check --password mysecretpassword
+# Native tools (install via apt/homebrew)
+sudo apt install amass nmap ffuf sqlmap    # Kali/Ubuntu
+brew install amass nmap ffuf sqlmap        # macOS
 
 # Or use the launcher
 chmod +x cli/run.sh
-./cli/run.sh -t example.com --deep
+./cli/run.sh
 ```
 
-### Web UI (Next.js + FastAPI)
+---
+
+## 📡 Native Tool Integrations
+
+| Tool | Purpose | Status |
+|------|---------|--------|
+| **Amass** | Advanced subdomain enumeration | ✅ Integrated |
+| **Subfinder** | Passive subdomain discovery | ✅ Integrated |
+| **Nuclei** | Template-based vulnerability scanner | ✅ Integrated |
+| **Nuclei Templates** | 6000+ vulnerability templates | ✅ Auto-install |
+| **SQLMap** | SQL Injection detection & exploitation | ✅ Integrated |
+| **FFUF** | Fast web directory/content fuzzer | ✅ Integrated |
+| **Nmap** | Port scanning & service detection | ✅ Integrated |
+| **Waybacks** | Historical URL discovery | ✅ Integrated |
+| **Gau** | Get All URLs from AlienVault OTX | ✅ Integrated |
+
+---
+
+## 🛡️ Vulnerability Scanners
+
+| Module | Description |
+|--------|-------------|
+| XSS Scanner | Cross-Site Scripting detection |
+| SQL Injection | SQL injection vulnerability scanner |
+| SSRF Scanner | Server-Side Request Forgery |
+| LFI Scanner | Local File Inclusion |
+| Command Injection | OS command execution |
+| Open Redirect | URL redirection vulnerability |
+| SSTI Scanner | Server-Side Template Injection |
+| CORS Misconfiguration | CORS security check |
+
+---
+
+## 🔍 Recon Modules
+
+| Module | Description |
+|--------|-------------|
+| Subdomain Enum | Amass + Subfinder + wordlist |
+| Port Scan | Top 1000 ports via nmap |
+| S3 Bucket Finder | AWS S3 bucket enumeration |
+| Wayback URLs | Historical URL discovery |
+| JS Security Scan | Secrets/endpoints in JS files |
+| CMS Detection | WordPress, Laravel, React, etc. |
+| SSL Deep Scan | Full TLS analysis + heartbleed |
+| Subdomain Takeover | CNAME takeover detection |
+| Favicon Hash | MMH3 fingerprinting |
+
+---
+
+## 🌐 Lookup Tools
+
+| Module | Description |
+|--------|-------------|
+| WHOIS Lookup | Domain registration info |
+| IP Geolocation | IP location lookup |
+| Reverse DNS | IP to hostname |
+| Port Scan | Common port scanner |
+| CMS Detection | Technology fingerprinting |
+
+---
+
+## 🔑 CVE Search (NVD API)
 
 ```bash
-# Terminal 1: Start API
+# By keyword
+python3 backend/core/engine.py
+→ Select: 6
+→ Select: 1 (keyword)
+→ Keyword: xss
+
+# By year
+→ Select: 2 (year)
+→ Year: 2024
+
+# By CVE ID
+→ Select: 4
+→ CVE ID: CVE-2024-1234
+
+# By keyword + year
+→ Select: 3
+→ Keyword: sql injection
+→ Year: 2024
+```
+
+---
+
+## 📡 API Endpoints
+
+```bash
+# Start FastAPI server
 cd backend
-pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000
 
-# Terminal 2: Start Frontend
-cd frontend
-npm install
-npm run dev
+# Run scan
+POST /api/v1/scan
+{"target": "example.com", "modules": ["subdomain", "nuclei"]}
 
-# Open http://localhost:3000
+# Get results
+GET /api/v1/results/{scan_id}
+
+# CVE search
+GET /api/v1/cve?keyword=xss&year=2024
 ```
 
 ---
@@ -132,101 +187,69 @@ npm run dev
 All-in-One/
 ├── backend/
 │   ├── core/
-│   │   └── engine.py          # Main CLI engine
-│   ├── modules/               # All recon modules
+│   │   ├── engine.py          # Main CLI engine v3.0
+│   │   └── __init__.py
+│   ├── modules/
+│   │   ├── nuclei_scan.py
+│   │   ├── sqlmap_scan.py
+│   │   ├── amass_scan.py
 │   │   ├── subdomain_enum.py
-│   │   ├── dns_enum.py
 │   │   ├── port_scan.py
 │   │   ├── cors_check.py
 │   │   ├── ssl_check.py
-│   │   ├── ssl_deep.py
 │   │   ├── whois_lookup.py
-│   │   ├── cms_detector.py
-│   │   ├── js_scanner.py
-│   │   ├── crawl.py
-│   │   ├── wayback.py
-│   │   ├── nuclei_scan.py
+│   │   ├── ip_lookup.py
+│   │   ├── cve_search.py
+│   │   ├── xss_scan.py
+│   │   ├── sqli_scan.py
 │   │   ├── s3_bucket.py
-│   │   ├── github_recon.py
-│   │   ├── leak_check.py
+│   │   ├── wayback.py
+│   │   ├── js_scanner.py
+│   │   ├── cms_detector.py
 │   │   ├── takeover.py
 │   │   ├── favicon.py
-│   │   └── ip_lookup.py
-│   └── main.py                 # FastAPI server
+│   │   ├── crawl.py
+│   │   ├── leak_check.py
+│   │   ├── github_recon.py
+│   │   ├── ssl_deep.py
+│   │   └── bulk_check.py
+│   ├── main.py               # FastAPI backend
+│   └── requirements.txt
 ├── frontend/
-│   └── src/app/
-│       └── page.tsx           # Next.js dashboard
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── page.tsx      # Main dashboard
+│   │   │   ├── layout.tsx
+│   │   │   └── globals.css
+│   │   └── components/
+│   ├── package.json
+│   └── next.config.js
 ├── cli/
-│   └── run.sh                  # CLI launcher
+│   └── run.sh                # Launcher script
 └── README.md
 ```
 
 ---
 
-## 🛠️ Installation
-
-### Python Dependencies
+## 🚀 Quick Start
 
 ```bash
-pip install requests urllib3 colorama pydantic python-multipart mmh3
-```
+# 1. Clone
+git clone git@github.com:B4ckR3d/All-in-One.git
+cd All-in-One
 
-### External Tools (Optional)
+# 2. Install dependencies
+pip install -r backend/requirements.txt
 
-```bash
-# Nuclei (vulnerability scanner)
-go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+# 3. Run interactive CLI
+python3 backend/core/engine.py
 
-# Gau (URL collector)
-go install github.com/lc/gau@latest
-
-# subfinder (subdomain enumeration)
-go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
-
-# httpx (HTTP probe)
-go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+# 4. Or use the launcher
+chmod +x cli/run.sh && ./cli/run.sh
 ```
 
 ---
 
-## 📊 API Endpoints
+## ⚠️ Disclaimer
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | API info |
-| GET | `/health` | Health check |
-| POST | `/api/recon` | Start recon scan |
-| GET | `/api/recon/{job_id}` | Get recon results |
-| POST | `/api/cve` | CVE search |
-| POST | `/api/scan` | Start vulnerability scan |
-| GET | `/api/scan/{job_id}` | Get scan results |
-| POST | `/api/lookup` | WHOIS/IP lookup |
-| POST | `/api/utils` | Encode/Decode/Hash |
-
----
-
-## 🔧 Configuration
-
-### Environment Variables
-
-```bash
-# Backend (optional)
-NEXT_PUBLIC_API_URL=http://localhost:8000
-
-# Python dependencies
-requests>=2.31.0
-urllib3>=2.0.0
-mmh3>=3.0
-```
-
----
-
-## 🛡️ Disclaimer
-
-This toolkit is for **authorized security testing** and **educational purposes** only. Do not use against systems without explicit permission.
-
----
-
-## 📝 License
-
-MIT License - See LICENSE file for details.
+This toolkit is for **authorized security testing only**. Unauthorized access to computer systems is illegal. Always obtain proper authorization before scanning any target.
