@@ -13,16 +13,19 @@
 ### Recon Modules
 | Module | Description |
 |--------|-------------|
-| Subdomain Enum | DNS enumeration with 100+ wordlist |
+| Subdomain Enum | DNS enumeration with wordlist |
 | DNS Records | A, AAAA, MX, TXT, NS, CNAME, SOA |
 | Port Scan | Common ports + extended range |
 | HTTP Probe | Endpoint discovery + tech detection |
-| CORS Check | Misconfiguration scanner |
+| CORS Check | CORS misconfiguration scanner |
 | SSL Info | Certificate analysis |
 | WHOIS Lookup | Domain registration info |
 | Security Headers | X-Frame-Options, CSP, HSTS, etc. |
-| Tech Detection | WordPress, Laravel, React, etc. |
+| CMS Detector | WordPress, Laravel, React, Django, etc. |
 | Directory Busting | Common path discovery |
+| Web Crawler | Extract links, forms, emails, social media |
+| Wayback Machine | Historical URL discovery |
+| Favicon Hash | MMH3 hash for Shodan integration |
 
 ### CVE Search
 - Search by **Year** (e.g., 2024 CVEs)
@@ -31,10 +34,28 @@
 - Real-time data from **NVD (National Vulnerability Database)**
 
 ### Vulnerability Scanners
-- **XSS** — Cross-Site Scripting detection
-- **SQLi** — SQL Injection detection
-- **SSRF** — Server-Side Request Forgery
-- **Open Redirect** — Redirect vulnerability
+| Scanner | Description |
+|---------|-------------|
+| XSS | Cross-Site Scripting detection |
+| SQLi | SQL Injection detection |
+| SSRF | Server-Side Request Forgery |
+| Open Redirect | Redirect vulnerability |
+| Nuclei Scan | Template-based vulnerability scanner |
+| Subdomain Takeover | AWS S3, GitHub Pages, Heroku, Netlify, etc. |
+
+### Advanced Recon
+| Module | Description |
+|--------|-------------|
+| S3 Bucket Finder | AWS S3 bucket enumeration |
+| GitHub Recon | GitHub dorking, repo discovery |
+| JS Scanner | Extract secrets & endpoints from JS files |
+| SSL Deep Scan | Full TLS analysis, cipher suites, vulnerabilities |
+| IP Lookup | Geolocation, reverse DNS, AS lookup |
+
+### Leak / Breach Check
+- **HaveIBeenPwned** password check
+- Email breach lookup (requires API key)
+- Domain breach enumeration
 
 ### Lookup Tools
 - **WHOIS** — Domain registration lookup
@@ -62,10 +83,25 @@ cd All-in-One
 # Install Python dependencies
 pip install -r backend/requirements.txt
 
-# Run CLI
+# Run recon on target
 python3 backend/core/engine.py -t example.com --recon
+
+# Deep recon
+python3 backend/core/engine.py -t example.com --deep
+
+# CVE search
 python3 backend/core/engine.py --cve --year 2024 --keyword xss
+
+# WHOIS lookup
 python3 backend/core/engine.py --whois -t example.com
+
+# Specific modules
+python3 backend/core/engine.py -t example.com --subdomains --cors --dns
+python3 backend/core/engine.py -t example.com --cms --js-scan
+python3 backend/core/engine.py -t example.com --wayback
+python3 backend/core/engine.py -t example.com --s3-bucket
+python3 backend/core/engine.py -t example.com --ssl-deep
+python3 backend/core/engine.py --leak-check --password mysecretpassword
 
 # Or use the launcher
 chmod +x cli/run.sh
@@ -97,33 +133,58 @@ All-in-One/
 ├── backend/
 │   ├── core/
 │   │   └── engine.py          # Main CLI engine
-│   ├── main.py                 # FastAPI server
-│   └── requirements.txt
+│   ├── modules/               # All recon modules
+│   │   ├── subdomain_enum.py
+│   │   ├── dns_enum.py
+│   │   ├── port_scan.py
+│   │   ├── cors_check.py
+│   │   ├── ssl_check.py
+│   │   ├── ssl_deep.py
+│   │   ├── whois_lookup.py
+│   │   ├── cms_detector.py
+│   │   ├── js_scanner.py
+│   │   ├── crawl.py
+│   │   ├── wayback.py
+│   │   ├── nuclei_scan.py
+│   │   ├── s3_bucket.py
+│   │   ├── github_recon.py
+│   │   ├── leak_check.py
+│   │   ├── takeover.py
+│   │   ├── favicon.py
+│   │   └── ip_lookup.py
+│   └── main.py                 # FastAPI server
 ├── frontend/
-│   ├── src/
-│   │   └── app/
-│   │       └── page.tsx       # Next.js dashboard
-│   └── package.json
+│   └── src/app/
+│       └── page.tsx           # Next.js dashboard
 ├── cli/
 │   └── run.sh                  # CLI launcher
-├── docs/
-│   └── README.md
 └── README.md
 ```
 
 ---
 
-## 🔧 Configuration
+## 🛠️ Installation
 
-### Environment Variables
+### Python Dependencies
 
 ```bash
-# Backend (optional)
-NEXT_PUBLIC_API_URL=http://localhost:8000
+pip install requests urllib3 colorama pydantic python-multipart mmh3
+```
 
-# Python dependencies
-requests>=2.31.0
-urllib3>=2.0.0
+### External Tools (Optional)
+
+```bash
+# Nuclei (vulnerability scanner)
+go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+
+# Gau (URL collector)
+go install github.com/lc/gau@latest
+
+# subfinder (subdomain enumeration)
+go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+
+# httpx (HTTP probe)
+go install github.com/projectdiscovery/httpx/cmd/httpx@latest
 ```
 
 ---
@@ -141,6 +202,22 @@ urllib3>=2.0.0
 | GET | `/api/scan/{job_id}` | Get scan results |
 | POST | `/api/lookup` | WHOIS/IP lookup |
 | POST | `/api/utils` | Encode/Decode/Hash |
+
+---
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# Backend (optional)
+NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# Python dependencies
+requests>=2.31.0
+urllib3>=2.0.0
+mmh3>=3.0
+```
 
 ---
 
